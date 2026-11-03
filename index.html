@@ -1,11 +1,1221 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hello World</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dice Duel</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+  }
+}
+</script>
+<style>
+  :root {
+    --bg: #f4f4f5;
+    --card: #ffffff;
+    --text: #18181b;
+    --muted: #71717a;
+    --border: #e4e4e7;
+    --track: #e4e4e7;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --player-1: #1f6fa8;
+    --player-2: #b04343;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18181b;
+      --card: #27272a;
+      --text: #fafafa;
+      --muted: #a1a1aa;
+      --border: #3f3f46;
+      --track: #3f3f46;
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --player-1: #4c9bd4;
+      --player-2: #d96a6a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  main {
+    height: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 12px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .players, .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .player {
+    padding: 10px 12px;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .player.active[data-player="0"] { border-color: var(--player-1); }
+  .player.active[data-player="1"] { border-color: var(--player-2); }
+
+  .player-heading {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .health { font-variant-numeric: tabular-nums; }
+
+  .bar {
+    height: 10px;
+    overflow: hidden;
+    background: var(--track);
+    border-radius: 5px;
+  }
+
+  .fill {
+    height: 100%;
+    transition: width 0.3s ease;
+  }
+
+  [data-player="0"] .fill { background: var(--player-1); }
+  [data-player="1"] .fill { background: var(--player-2); }
+
+  #stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+
+  canvas {
+    display: block;
+    touch-action: none;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 16px;
+    text-align: center;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    border-radius: 10px;
+  }
+
+  .overlay[hidden] { display: none; }
+
+  .overlay h1, .overlay h2 {
+    margin: 0;
+    font-size: 1.75rem;
+  }
+
+  .overlay p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .overlay-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  #status {
+    margin: 0;
+    min-height: 1.4em;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .hand {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .die-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  button {
+    padding: 10px 14px;
+    font: inherit;
+    font-weight: 600;
+    color: #ffffff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  button[hidden] { display: none; }
+  button.heal { background: #15803d; }
+  button.secondary { background: var(--muted); }
+  button:hover:not(:disabled) { background: var(--accent-hover); }
+  button.heal:hover:not(:disabled) { background: #166534; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  @media (max-width: 640px) {
+    main { padding: 8px 16px 12px; }
+    button { padding: 8px 10px; font-size: 0.85rem; }
+    .fill { transition: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fill { transition: none; }
+  }
+</style>
 </head>
 <body>
-  <h1>Hello world!</h1>
+  <main>
+    <div class="players">
+      <section class="player" data-player="0">
+        <div class="player-heading"><span class="name">Player 1</span><span class="health">100</span></div>
+        <div class="bar"><div class="fill" style="width: 100%"></div></div>
+      </section>
+      <section class="player" data-player="1">
+        <div class="player-heading"><span class="name">Player 2</span><span class="health">100</span></div>
+        <div class="bar"><div class="fill" style="width: 100%"></div></div>
+      </section>
+    </div>
+
+    <div id="stage">
+      <div class="overlay" id="menu" hidden>
+        <h1>Dice Duel</h1>
+        <p>Bring your opponent's health to 0. Throw at their board to attack, or at yours to heal.</p>
+        <div class="overlay-buttons">
+          <button id="two-players" type="button">2 Players</button>
+          <button id="vs-computer" type="button">vs Computer</button>
+        </div>
+      </div>
+      <div class="overlay" id="game-over" hidden>
+        <h2 id="winner"></h2>
+        <div class="overlay-buttons">
+          <button id="rematch" type="button">Rematch</button>
+          <button id="change-mode" class="secondary" type="button">Change mode</button>
+        </div>
+      </div>
+    </div>
+
+    <p id="status" aria-live="polite">Loading…</p>
+
+    <div class="controls" id="controls"></div>
+  </main>
+
+  <script type="module">
+    // #region game-logic (no browser APIs here, so it can be tested on its own)
+    const GRAVITY = 30;
+    const BOARD_WIDTH = 6;
+    const BOARD_HALF_DEPTH = 2.5;
+    const HAND_Z = 3.4;
+    const HAND_X = [[-4.2, -1.8], [1.8, 4.2]];
+    const HOLD_HEIGHT = 1.6; // high enough to carry a die over the others
+    const HOLD_LIMIT_X = BOARD_WIDTH - 0.75;
+    const HOLD_LIMIT_Z = BOARD_HALF_DEPTH - 0.75;
+    const LINE_MARGIN = 0.3; // a die this close to the divider has no clear board
+    const DIE_CLEARANCE = 1.5;
+    const GENTLE_SPEED = 6; // table units per second; slower releases go back to the hand
+    const MAX_THROW_SPEED = 30;
+    const MAX_HEALTH = 100;
+    const LOW_HEALTH = 40;
+    const FINISHING_HEALTH = 12; // the most two dice can normally deal
+    const HEAL_CHANCE = 0.4;
+
+    // Face values in three.js box order (+x, -x, +y, -y, +z, -z); opposite faces add up to 7
+    const BOX_VALUES = [1, 6, 2, 5, 3, 4];
+
+    function random(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function clamp(value, limit) {
+      return Math.max(-limit, Math.min(limit, value));
+    }
+
+    // dice: two of { value, action: 'attack' | 'heal' }
+    function scoreTurn(dice) {
+      const [a, b] = dice;
+      const score = { kind: 'normal', damageOpponent: 0, healOpponent: 0, damageThrower: 0, healThrower: 0 };
+
+      if (a.action !== b.action) {
+        score.kind = 'split';
+        for (const die of dice) {
+          if (die.action === 'attack') score.damageOpponent += die.value;
+          else score.healThrower += die.value;
+        }
+        return score;
+      }
+
+      const attacking = a.action === 'attack';
+      const sum = a.value + b.value;
+
+      if (a.value === 1 && b.value === 1) {
+        score.kind = 'fail';
+        if (attacking) score.healOpponent = 2;
+        else score.damageThrower = 2;
+      } else if (sum === 7) {
+        score.kind = 'special';
+        score.damageOpponent = 7;
+        score.healThrower = 7;
+      } else {
+        const critical = a.value === 6 && b.value === 6;
+        if (critical) score.kind = 'critical';
+        const amount = critical ? sum * 1.5 : sum;
+        if (attacking) score.damageOpponent = amount;
+        else score.healThrower = amount;
+      }
+      return score;
+    }
+
+    // Damage lands first, so a killing blow ends the game before any healing
+    function applyScore(health, thrower, score) {
+      const opponent = 1 - thrower;
+      const next = [...health];
+
+      next[opponent] = Math.max(0, next[opponent] - score.damageOpponent);
+      if (next[opponent] === 0) return { health: next, winner: thrower };
+
+      next[thrower] = Math.max(0, next[thrower] - score.damageThrower);
+      if (next[thrower] === 0) return { health: next, winner: opponent };
+
+      next[opponent] = Math.min(MAX_HEALTH, next[opponent] + score.healOpponent);
+      next[thrower] = Math.min(MAX_HEALTH, next[thrower] + score.healThrower);
+      return { health: next, winner: null };
+    }
+
+    function describeScore(score, thrower, opponent) {
+      switch (score.kind) {
+        case 'critical':
+          return score.damageOpponent
+            ? `Critical! ${thrower} deals ${score.damageOpponent} damage`
+            : `Critical! ${thrower} heals ${score.healThrower}`;
+        case 'fail':
+          return score.healOpponent
+            ? `Fail! ${opponent} heals ${score.healOpponent}`
+            : `Fail! ${thrower} takes ${score.damageThrower} damage`;
+        case 'special':
+          return `Special 7! ${thrower} deals ${score.damageOpponent} damage and heals ${score.healThrower}`;
+        case 'split':
+          return `${thrower} deals ${score.damageOpponent} damage and heals ${score.healThrower}`;
+        default:
+          return score.damageOpponent
+            ? `${thrower} deals ${score.damageOpponent} damage`
+            : `${thrower} heals ${score.healThrower}`;
+      }
+    }
+
+    // first: the die already thrown this turn ({ value, action }), or null.
+    // Healing is as strong as attacking, so healing every time it's behind would stall the game.
+    function computerAction(ownHealth, opponentHealth, first, chance = Math.random()) {
+      if (first) {
+        if (first.value === 1) return first.action === 'attack' ? 'heal' : 'attack';
+        return first.action;
+      }
+      if (opponentHealth <= FINISHING_HEALTH) return 'attack';
+      return ownHealth < LOW_HEALTH && ownHealth < opponentHealth && chance < HEAL_CHANCE ? 'heal' : 'attack';
+    }
+
+    function createTable(CANNON) {
+      const NORMALS = [
+        new CANNON.Vec3(1, 0, 0), new CANNON.Vec3(-1, 0, 0),
+        new CANNON.Vec3(0, 1, 0), new CANNON.Vec3(0, -1, 0),
+        new CANNON.Vec3(0, 0, 1), new CANNON.Vec3(0, 0, -1)
+      ];
+      const UP = new CANNON.Vec3(0, 1, 0);
+
+      const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -GRAVITY, 0) });
+      world.allowSleep = true;
+      world.solver.iterations = 20;
+      world.defaultContactMaterial.friction = 0.3;
+      world.defaultContactMaterial.restitution = 0.45;
+
+      function addPlane(x, y, z, axis, angle) {
+        const body = new CANNON.Body({ type: CANNON.Body.STATIC, shape: new CANNON.Plane() });
+        body.position.set(x, y, z);
+        body.quaternion.setFromAxisAngle(axis, angle);
+        world.addBody(body);
+      }
+      const axisX = new CANNON.Vec3(1, 0, 0);
+      addPlane(0, 0, 0, axisX, -Math.PI / 2);
+      addPlane(-BOARD_WIDTH, 0, 0, UP, Math.PI / 2);
+      addPlane(BOARD_WIDTH, 0, 0, UP, -Math.PI / 2);
+      addPlane(0, 0, -BOARD_HALF_DEPTH, UP, 0);
+      addPlane(0, 0, BOARD_HALF_DEPTH, UP, Math.PI);
+
+      const dice = [];
+      for (const owner of [0, 1]) {
+        for (const index of [0, 1]) {
+          const body = new CANNON.Body({
+            mass: 1,
+            shape: new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)),
+            linearDamping: 0.05,
+            angularDamping: 0.1,
+            sleepSpeedLimit: 0.2,
+            sleepTimeLimit: 0.4
+          });
+          world.addBody(body);
+          dice.push({ owner, index, body, state: 'hand', targetBoard: null, move: null, holdX: 0, holdZ: 0 });
+        }
+      }
+
+      const table = { dice, reduceMotion: false, rethrows: 0, onMoveDone: () => {} };
+
+      function setFlatRandom(body) {
+        const normal = NORMALS[Math.floor(Math.random() * NORMALS.length)];
+        const faceUp = new CANNON.Quaternion().setFromVectors(normal, UP);
+        const yaw = new CANNON.Quaternion().setFromAxisAngle(UP, random(0, Math.PI * 2));
+        body.quaternion.copy(yaw.mult(faceUp));
+      }
+
+      // Dice out of play follow scripted positions and pass through everything
+      function makeScripted(die) {
+        const { body } = die;
+        body.type = CANNON.Body.KINEMATIC;
+        body.collisionResponse = false;
+        body.velocity.setZero();
+        body.angularVelocity.setZero();
+      }
+
+      function makeLive(die) {
+        const { body } = die;
+        body.type = CANNON.Body.DYNAMIC;
+        body.collisionResponse = true;
+        body.aabbNeedsUpdate = true;
+        body.wakeUp();
+        die.state = 'table';
+      }
+
+      table.reset = () => {
+        for (const die of dice) {
+          makeScripted(die);
+          die.body.position.set(HAND_X[die.owner][die.index], 0.5, HAND_Z);
+          setFlatRandom(die.body);
+          die.state = 'hand';
+          die.targetBoard = null;
+          die.move = null;
+        }
+      };
+
+      table.boardOf = die => (die.body.position.x < 0 ? 0 : 1);
+
+      function readTopFace(body) {
+        let value = 0;
+        let up = -Infinity;
+        NORMALS.forEach((normal, i) => {
+          const y = body.quaternion.vmult(normal).y;
+          if (y > up) {
+            up = y;
+            value = BOX_VALUES[i];
+          }
+        });
+        return { value, up };
+      }
+
+      table.valueOf = die => readTopFace(die.body).value;
+
+      // A die leaning on a wall or resting on another die has no clear result
+      function isCocked(body) {
+        return readTopFace(body).up < 0.98 || body.position.y > 0.6;
+      }
+
+      function needsRethrow(die) {
+        return isCocked(die.body)
+          || Math.abs(die.body.position.x) < LINE_MARGIN
+          || (die.targetBoard !== null && table.boardOf(die) !== die.targetBoard);
+      }
+
+      function spinAxis() {
+        const axis = new CANNON.Vec3(random(-1, 1), random(-1, 1), random(-1, 1));
+        axis.normalize();
+        return axis;
+      }
+
+      // Throw a die upward with a random spin, aimed so it lands on the given board
+      function launch(die, board, minLeap, maxLeap) {
+        const { body } = die;
+        const leap = random(minLeap, maxLeap);
+        const airTime = 2.2 * leap / GRAVITY;
+        const spin = random(14, 24);
+        const axis = spinAxis();
+        // Aim for the outer part of the board, so bounces are less likely to cross the divider
+        const aimX = (board === 0 ? -1 : 1) * random(2.8, 4.8);
+
+        makeLive(die);
+        body.velocity.set(
+          (aimX - body.position.x) / airTime,
+          leap,
+          (random(-1.2, 1.2) - body.position.z) / airTime
+        );
+        body.angularVelocity.set(axis.x * spin, axis.y * spin, axis.z * spin);
+      }
+
+      // Without motion: appear on the board with a random face up
+      function placeOnBoard(die, board) {
+        const others = dice.filter(other => other !== die && other.state === 'table');
+        const centreX = (board === 0 ? -1 : 1) * BOARD_WIDTH / 2;
+        let x;
+        let z;
+        do {
+          x = centreX + random(-2, 2);
+          z = random(-HOLD_LIMIT_Z, HOLD_LIMIT_Z);
+        } while (others.some(other =>
+          Math.hypot(other.body.position.x - x, other.body.position.z - z) < DIE_CLEARANCE));
+
+        die.body.position.set(x, 0.5, z);
+        setFlatRandom(die.body);
+        makeLive(die);
+        die.body.velocity.setZero();
+        die.body.angularVelocity.setZero();
+      }
+
+      function moveTo(die, x, y, z, seconds, arc, done) {
+        const { position } = die.body;
+        makeScripted(die);
+        die.state = 'moving';
+        die.move = {
+          elapsed: 0, seconds, arc, done,
+          fromX: position.x, fromY: position.y, fromZ: position.z,
+          toX: x, toY: y, toZ: z
+        };
+      }
+
+      table.throwFromHand = (die, board) => {
+        die.targetBoard = board;
+        if (table.reduceMotion) {
+          placeOnBoard(die, board);
+          return;
+        }
+        // Lift the die over the rim first, since it can't fly through the wall
+        moveTo(die, die.body.position.x, HOLD_HEIGHT, HOLD_LIMIT_Z, 0.2, 0, () => launch(die, board, 11, 14));
+      };
+
+      table.returnToHand = die => {
+        die.targetBoard = null;
+        moveTo(die, HAND_X[die.owner][die.index], 0.5, HAND_Z, 0.45, 1, () => {
+          die.state = 'hand';
+          table.onMoveDone();
+        });
+      };
+
+      table.hold = die => {
+        die.state = 'held';
+        die.holdX = die.body.position.x;
+        die.holdZ = Math.min(die.body.position.z, HOLD_LIMIT_Z);
+      };
+
+      table.moveHeld = (die, x, z) => {
+        die.holdX = clamp(x, HOLD_LIMIT_X);
+        die.holdZ = clamp(z, HOLD_LIMIT_Z);
+      };
+
+      // Speed sets the die's momentum and how hard it spins
+      table.throwHeld = (die, velocityX, velocityZ) => {
+        const { body } = die;
+        const speed = Math.hypot(velocityX, velocityZ);
+        const power = Math.min(speed, MAX_THROW_SPEED);
+        const scale = power / speed;
+        const strength = (power - GENTLE_SPEED) / (MAX_THROW_SPEED - GENTLE_SPEED);
+        const spin = 6 + strength * 18;
+        const axis = spinAxis();
+
+        // A quick flick can let go before the die has cleared the rim
+        body.position.set(
+          clamp(body.position.x, HOLD_LIMIT_X),
+          HOLD_HEIGHT,
+          clamp(body.position.z, HOLD_LIMIT_Z)
+        );
+        die.targetBoard = null;
+        makeLive(die);
+        body.velocity.set(velocityX * scale, power * 0.25, velocityZ * scale);
+        body.angularVelocity.set(axis.x * spin, axis.y * spin, axis.z * spin);
+      };
+
+      // True while any die in play is still moving
+      table.inMotion = () => dice.some(die =>
+        die.state === 'moving'
+        || (die.state === 'table' && die.body.sleepState !== CANNON.Body.SLEEPING));
+
+      // Gives any die without a clear result another throw; true if there were any
+      table.rethrowUnclear = () => {
+        const unclear = dice.filter(die => die.state === 'table' && needsRethrow(die));
+        for (const die of unclear) {
+          launch(die, die.targetBoard ?? table.boardOf(die), 6, 8);
+          table.rethrows++;
+        }
+        return unclear.length > 0;
+      };
+
+      function updateScripted(die, delta) {
+        const { position } = die.body;
+        if (die.state === 'held') {
+          const follow = 1 - Math.exp(-delta * 25);
+          position.x += (die.holdX - position.x) * follow;
+          position.y += (HOLD_HEIGHT - position.y) * follow;
+          position.z += (die.holdZ - position.z) * follow;
+          die.body.aabbNeedsUpdate = true;
+        } else if (die.state === 'moving') {
+          const move = die.move;
+          move.elapsed += delta;
+          const progress = Math.min(move.elapsed / move.seconds, 1);
+          const eased = progress * (2 - progress);
+          position.x = move.fromX + (move.toX - move.fromX) * eased;
+          position.y = move.fromY + (move.toY - move.fromY) * eased + Math.sin(progress * Math.PI) * move.arc;
+          position.z = move.fromZ + (move.toZ - move.fromZ) * eased;
+          die.body.aabbNeedsUpdate = true;
+          if (progress === 1) {
+            die.move = null;
+            move.done();
+          }
+        }
+      }
+
+      table.update = delta => {
+        dice.forEach(die => updateScripted(die, delta));
+        world.step(1 / 60, delta, 6);
+      };
+
+      table.reset();
+      return table;
+    }
+
+    // Runs setup and turns. onChange is called whenever the display needs refreshing.
+    function createMatch(table, onChange) {
+      const THROW_PAUSE = 0.7;
+      const OPENING_PAUSE = 1.4;
+      const RESULT_PAUSE = 1.8;
+
+      const match = {
+        phase: 'menu',
+        health: [MAX_HEALTH, MAX_HEALTH],
+        current: 0,
+        winner: null,
+        status: '',
+        computer: [false, false],
+        names: ['Player 1', 'Player 2'],
+        turnsPlayed: 0,
+        lastTurn: null
+      };
+
+      let busy = false;
+      let holding = null;
+      let thrown = [];
+      let timer = null;
+
+      table.onMoveDone = onChange;
+
+      function after(seconds, action) {
+        timer = { left: seconds, action };
+      }
+
+      function diceOf(player) {
+        return table.dice.filter(die => die.owner === player);
+      }
+
+      function actionOf(die) {
+        return table.boardOf(die) === match.current ? 'heal' : 'attack';
+      }
+
+      function usable(die) {
+        return die.owner === match.current
+          && die.state === 'hand'
+          && !busy
+          && !holding
+          && (match.phase === 'turn' || (match.phase === 'opening' && die.index === 0));
+      }
+
+      match.canThrow = die => usable(die) && !match.computer[die.owner];
+
+      function prompt() {
+        const name = match.names[match.current];
+        if (match.phase === 'opening') {
+          match.status = `${name}: roll to see who goes first`;
+        } else if (thrown.length === 0) {
+          match.status = `${name}: throw your first die`;
+        } else {
+          const first = thrown[0];
+          const place = actionOf(first) === 'attack' ? 'the attack board' : 'the heal board';
+          match.status = `${name}: first die shows ${table.valueOf(first)} on ${place}. Where does the second go?`;
+        }
+        onChange();
+        if (match.computer[match.current]) after(THROW_PAUSE, computerMove);
+      }
+
+      function computerMove() {
+        const hand = diceOf(match.current).filter(usable);
+        if (!hand.length) {
+          // Its dice are still on their way back to the hand
+          after(0.2, computerMove);
+          return;
+        }
+        const die = hand[0];
+        if (match.phase === 'opening') {
+          commitThrow(die, match.current);
+          return;
+        }
+        const first = thrown.length
+          ? { value: table.valueOf(thrown[0]), action: actionOf(thrown[0]) }
+          : null;
+        const action = computerAction(match.health[match.current], match.health[1 - match.current], first);
+        commitThrow(die, action === 'heal' ? match.current : 1 - match.current);
+      }
+
+      function markThrown(die) {
+        busy = true;
+        thrown.push(die);
+        match.status = 'Rolling…';
+        onChange();
+      }
+
+      function commitThrow(die, board) {
+        markThrown(die);
+        table.throwFromHand(die, board);
+      }
+
+      match.start = (computer, names) => {
+        match.computer = computer;
+        match.names = names;
+        match.health = [MAX_HEALTH, MAX_HEALTH];
+        match.current = 0;
+        match.winner = null;
+        match.phase = 'opening';
+        match.turnsPlayed = 0;
+        match.lastTurn = null;
+        busy = false;
+        holding = null;
+        thrown = [];
+        timer = null;
+        table.reset();
+        prompt();
+      };
+
+      match.throwWithButton = (die, action) => {
+        if (!match.canThrow(die)) return;
+        const opponentBoard = 1 - die.owner;
+        commitThrow(die, match.phase === 'opening' || action === 'heal' ? die.owner : opponentBoard);
+      };
+
+      match.grab = die => {
+        if (!match.canThrow(die)) return false;
+        holding = die;
+        table.hold(die);
+        onChange();
+        return true;
+      };
+
+      match.dragTo = (x, z) => {
+        if (holding) table.moveHeld(holding, x, z);
+      };
+
+      // A slow release isn't a throw, so it can't be used to place a chosen face
+      match.release = (velocityX, velocityZ) => {
+        if (!holding) return;
+        const die = holding;
+        holding = null;
+        if (Math.hypot(velocityX, velocityZ) < GENTLE_SPEED) {
+          table.returnToHand(die);
+          match.status = 'Too gentle: flick the die faster to throw it';
+          onChange();
+          return;
+        }
+        markThrown(die);
+        table.throwHeld(die, velocityX, velocityZ);
+      };
+
+      match.cancelHold = () => {
+        if (!holding) return;
+        table.returnToHand(holding);
+        holding = null;
+        onChange();
+      };
+
+      function clearTable(next) {
+        thrown.forEach(table.returnToHand);
+        thrown = [];
+        busy = false;
+        next();
+      }
+
+      function finishOpening() {
+        const [rollA, rollB] = thrown.map(table.valueOf);
+        match.status = `${match.names[0]} rolled ${rollA}, ${match.names[1]} rolled ${rollB}. `
+          + (rollA === rollB ? 'Tie, roll again!' : `${match.names[rollA > rollB ? 0 : 1]} goes first!`);
+        onChange();
+        after(OPENING_PAUSE, () => clearTable(() => {
+          if (rollA === rollB) {
+            match.current = 0;
+          } else {
+            match.current = rollA > rollB ? 0 : 1;
+            match.phase = 'turn';
+          }
+          prompt();
+        }));
+      }
+
+      function finishTurn() {
+        const thrower = match.current;
+        const dice = thrown.map(die => ({ value: table.valueOf(die), action: actionOf(die) }));
+        const score = scoreTurn(dice);
+        const result = applyScore(match.health, thrower, score);
+
+        match.lastTurn = { thrower, dice, score, before: match.health, after: result.health };
+        match.turnsPlayed++;
+        match.health = result.health;
+        match.status = `${dice[0].value} + ${dice[1].value}: `
+          + describeScore(score, match.names[thrower], match.names[1 - thrower]);
+
+        if (result.winner !== null) {
+          match.winner = result.winner;
+          match.phase = 'over';
+          busy = false;
+          onChange();
+          return;
+        }
+        onChange();
+        after(RESULT_PAUSE, () => clearTable(() => {
+          match.current = 1 - thrower;
+          prompt();
+        }));
+      }
+
+      function onSettled() {
+        if (match.phase === 'opening') {
+          if (match.current === 0) {
+            busy = false;
+            match.current = 1;
+            prompt();
+          } else {
+            finishOpening();
+          }
+        } else if (thrown.length < 2) {
+          busy = false;
+          prompt();
+        } else {
+          finishTurn();
+        }
+      }
+
+      match.update = delta => {
+        table.update(delta);
+
+        if (timer) {
+          timer.left -= delta;
+          if (timer.left <= 0) {
+            const { action } = timer;
+            timer = null;
+            action();
+          }
+          return;
+        }
+        if (busy && !table.inMotion() && !table.rethrowUnclear()) onSettled();
+      };
+
+      return match;
+    }
+    // #endregion game-logic
+
+    const stage = document.getElementById('stage');
+    const statusLine = document.getElementById('status');
+    const controls = document.getElementById('controls');
+    const menu = document.getElementById('menu');
+    const gameOver = document.getElementById('game-over');
+    const winnerHeading = document.getElementById('winner');
+    const panels = [...document.querySelectorAll('.player')];
+
+    const SPEED_WINDOW_MS = 100; // release speed is measured over this much recent movement
+
+    // Cells (1-9, left to right, top to bottom) that hold a pip for each face
+    const FACES = {
+      1: [5],
+      2: [1, 9],
+      3: [1, 5, 9],
+      4: [1, 3, 7, 9],
+      5: [1, 3, 5, 7, 9],
+      6: [1, 3, 4, 6, 7, 9]
+    };
+
+    function start(THREE, CANNON, RoundedBoxGeometry) {
+      const table = createTable(CANNON);
+      table.reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // --- Scene ---
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      const canvas = renderer.domElement;
+      stage.prepend(canvas);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+      const lookAt = new THREE.Vector3(0, 0, 0.7);
+      const cameraOffset = new THREE.Vector3(0, 13, 10);
+
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8a8a, 1.6));
+
+      const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+      sun.position.set(3, 14, 5);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.left = -9;
+      sun.shadow.camera.right = 9;
+      sun.shadow.camera.top = 9;
+      sun.shadow.camera.bottom = -9;
+      scene.add(sun);
+
+      function boardTexture(color, label) {
+        const texture = document.createElement('canvas');
+        texture.width = 1024;
+        texture.height = 854;
+        const ctx = texture.getContext('2d');
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, texture.width, texture.height);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.font = '700 110px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, texture.width / 2, texture.height / 2);
+        const map = new THREE.CanvasTexture(texture);
+        map.colorSpace = THREE.SRGBColorSpace;
+        return map;
+      }
+
+      function addBoard(player, color, label) {
+        const board = new THREE.Mesh(
+          new THREE.PlaneGeometry(BOARD_WIDTH, BOARD_HALF_DEPTH * 2),
+          new THREE.MeshStandardMaterial({ map: boardTexture(color, label), roughness: 0.95 })
+        );
+        board.rotation.x = -Math.PI / 2;
+        board.position.x = (player === 0 ? -1 : 1) * BOARD_WIDTH / 2;
+        board.receiveShadow = true;
+        scene.add(board);
+      }
+      addBoard(0, '#1f5f8b', 'PLAYER 1');
+      addBoard(1, '#8b3a3a', 'PLAYER 2');
+
+      const divider = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.08, BOARD_HALF_DEPTH * 2),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      divider.rotation.x = -Math.PI / 2;
+      divider.position.y = 0.01;
+      scene.add(divider);
+
+      const RIM = 0.3;
+      const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3324, roughness: 0.7 });
+      function addRim(width, depth, x, z) {
+        const rim = new THREE.Mesh(new THREE.BoxGeometry(width, 0.5, depth), woodMaterial);
+        rim.position.set(x, 0.25, z);
+        rim.castShadow = true;
+        rim.receiveShadow = true;
+        scene.add(rim);
+      }
+      const outerWidth = (BOARD_WIDTH + RIM) * 2;
+      addRim(outerWidth, RIM, 0, -BOARD_HALF_DEPTH - RIM / 2);
+      addRim(outerWidth, RIM, 0, BOARD_HALF_DEPTH + RIM / 2);
+      addRim(RIM, BOARD_HALF_DEPTH * 2, -BOARD_WIDTH - RIM / 2, 0);
+      addRim(RIM, BOARD_HALF_DEPTH * 2, BOARD_WIDTH + RIM / 2, 0);
+
+      const shelfDepth = 1.4;
+      const shelf = new THREE.Mesh(
+        new THREE.PlaneGeometry(outerWidth, shelfDepth),
+        new THREE.MeshStandardMaterial({ color: 0x8a6a4d, roughness: 0.8 })
+      );
+      shelf.rotation.x = -Math.PI / 2;
+      shelf.position.z = BOARD_HALF_DEPTH + RIM + shelfDepth / 2;
+      shelf.receiveShadow = true;
+      scene.add(shelf);
+
+      // --- Dice meshes ---
+      function faceTexture(value, background, pipColor) {
+        const size = 256;
+        const face = document.createElement('canvas');
+        face.width = face.height = size;
+        const ctx = face.getContext('2d');
+        ctx.fillStyle = background;
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = pipColor;
+        for (const cell of FACES[value]) {
+          const col = (cell - 1) % 3;
+          const row = Math.floor((cell - 1) / 3);
+          ctx.beginPath();
+          ctx.arc(size * (0.25 + col * 0.25), size * (0.25 + row * 0.25), size * 0.09, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        const texture = new THREE.CanvasTexture(face);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        return texture;
+      }
+
+      const dieGeometry = new RoundedBoxGeometry(1, 1, 1, 4, 0.1);
+      const dieMaterials = [['#fafafa', '#18181b'], ['#27272a', '#fafafa']].map(([background, pips]) =>
+        BOX_VALUES.map(value =>
+          new THREE.MeshStandardMaterial({ map: faceTexture(value, background, pips), roughness: 0.35 })
+        )
+      );
+
+      for (const die of table.dice) {
+        die.mesh = new THREE.Mesh(dieGeometry, dieMaterials[die.owner]);
+        die.mesh.castShadow = true;
+        scene.add(die.mesh);
+      }
+
+      // --- Controls ---
+      const dieButtons = new Map();
+      let keepFocusOnButtons = false;
+
+      function makeButton(parent, text, className, onClick) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = text;
+        if (className) button.className = className;
+        button.addEventListener('click', () => {
+          keepFocusOnButtons = true;
+          onClick();
+        });
+        parent.appendChild(button);
+        return button;
+      }
+
+      for (const player of [0, 1]) {
+        const hand = document.createElement('div');
+        hand.className = 'hand';
+        for (const die of table.dice.filter(d => d.owner === player)) {
+          const group = document.createElement('div');
+          group.className = 'die-controls';
+          dieButtons.set(die, {
+            roll: makeButton(group, 'Roll', '', () => match.throwWithButton(die, 'heal')),
+            attack: makeButton(group, 'Attack', '', () => match.throwWithButton(die, 'attack')),
+            heal: makeButton(group, 'Heal', 'heal', () => match.throwWithButton(die, 'heal'))
+          });
+          hand.appendChild(group);
+        }
+        controls.appendChild(hand);
+      }
+
+      function render() {
+        statusLine.textContent = match.status;
+        panels.forEach((panel, player) => {
+          panel.classList.toggle('active', match.phase !== 'menu' && match.phase !== 'over' && match.current === player);
+          panel.querySelector('.name').textContent = match.names[player];
+          panel.querySelector('.health').textContent = match.health[player];
+          panel.querySelector('.fill').style.width = `${match.health[player] / MAX_HEALTH * 100}%`;
+        });
+
+        const available = [];
+        for (const [die, { roll, attack, heal }] of dieButtons) {
+          const opening = match.phase === 'opening';
+          const enabled = match.canThrow(die);
+          const label = `${match.names[die.owner]}, die ${die.index + 1}`;
+
+          roll.hidden = !opening || die.index !== 0;
+          attack.hidden = heal.hidden = opening;
+          roll.setAttribute('aria-label', `${label}: roll`);
+          attack.setAttribute('aria-label', `${label}: attack`);
+          heal.setAttribute('aria-label', `${label}: heal`);
+          for (const button of [roll, attack, heal]) {
+            button.disabled = !enabled;
+            if (enabled && !button.hidden) available.push(button);
+          }
+        }
+
+        // Keyboard players lose focus when their button disables, so move it along
+        if (keepFocusOnButtons && available.length && !available.includes(document.activeElement)) {
+          available[0].focus();
+        }
+
+        menu.hidden = match.phase !== 'menu';
+        gameOver.hidden = match.phase !== 'over';
+        if (match.phase === 'over') {
+          winnerHeading.textContent = `${match.names[match.winner]} wins!`;
+        }
+      }
+
+      const match = createMatch(table, render);
+
+      let lastMode = null;
+      function startMode(computer, names) {
+        lastMode = { computer, names };
+        match.start(computer, names);
+      }
+
+      document.getElementById('two-players').addEventListener('click', () => {
+        startMode([false, false], ['Player 1', 'Player 2']);
+      });
+      document.getElementById('vs-computer').addEventListener('click', () => {
+        startMode([false, true], ['You', 'Computer']);
+      });
+      document.getElementById('rematch').addEventListener('click', () => {
+        startMode(lastMode.computer, lastMode.names);
+      });
+      document.getElementById('change-mode').addEventListener('click', () => {
+        match.phase = 'menu';
+        table.reset();
+        match.status = 'Choose a mode to start';
+        render();
+      });
+
+      // --- Dragging ---
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      const holdPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -HOLD_HEIGHT);
+      let grab = null;
+
+      function aimRay(event) {
+        const rect = canvas.getBoundingClientRect();
+        pointer.set(
+          (event.clientX - rect.left) / rect.width * 2 - 1,
+          -(event.clientY - rect.top) / rect.height * 2 + 1
+        );
+        raycaster.setFromCamera(pointer, camera);
+      }
+
+      function throwableDieUnderPointer() {
+        const hits = raycaster.intersectObjects(table.dice.map(die => die.mesh));
+        if (!hits.length) return null;
+        const die = table.dice.find(d => d.mesh === hits[0].object);
+        return match.canThrow(die) ? die : null;
+      }
+
+      // Average pointer velocity over the last moments before release, so a die
+      // that was held still and then let go has no momentum
+      function releaseVelocity() {
+        const cutoff = performance.now() - SPEED_WINDOW_MS;
+        const recent = grab.samples.filter(sample => sample.time >= cutoff);
+        if (recent.length < 2) return { x: 0, z: 0 };
+
+        const first = recent[0];
+        const last = recent[recent.length - 1];
+        const seconds = (last.time - first.time) / 1000;
+        if (seconds <= 0) return { x: 0, z: 0 };
+        return { x: (last.x - first.x) / seconds, z: (last.z - first.z) / seconds };
+      }
+
+      canvas.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        aimRay(event);
+        const die = throwableDieUnderPointer();
+        const point = raycaster.ray.intersectPlane(holdPlane, new THREE.Vector3());
+        if (!die || !point || !match.grab(die)) return;
+
+        event.preventDefault();
+        keepFocusOnButtons = false;
+        canvas.setPointerCapture(event.pointerId);
+        canvas.style.cursor = 'grabbing';
+        grab = {
+          pointerId: event.pointerId,
+          samples: [{ x: point.x, z: point.z, time: performance.now() }]
+        };
+      });
+
+      canvas.addEventListener('pointermove', event => {
+        aimRay(event);
+        if (!grab) {
+          canvas.style.cursor = throwableDieUnderPointer() ? 'grab' : '';
+          return;
+        }
+        if (event.pointerId !== grab.pointerId) return;
+
+        const point = raycaster.ray.intersectPlane(holdPlane, new THREE.Vector3());
+        if (!point) return;
+
+        const now = performance.now();
+        match.dragTo(point.x, point.z);
+        grab.samples.push({ x: point.x, z: point.z, time: now });
+        grab.samples = grab.samples.filter(sample => sample.time >= now - SPEED_WINDOW_MS);
+      });
+
+      canvas.addEventListener('pointerup', event => {
+        if (!grab || event.pointerId !== grab.pointerId) return;
+        const velocity = releaseVelocity();
+        grab = null;
+        canvas.style.cursor = '';
+        match.release(velocity.x, velocity.z);
+      });
+
+      canvas.addEventListener('pointercancel', event => {
+        if (!grab || event.pointerId !== grab.pointerId) return;
+        grab = null;
+        canvas.style.cursor = '';
+        match.cancelHold();
+      });
+
+      function resize() {
+        const width = stage.clientWidth;
+        const height = stage.clientHeight;
+        if (!width || !height) return;
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        // Pull back on narrow screens so the whole table stays in view
+        camera.position.copy(cameraOffset)
+          .multiplyScalar(Math.max(1, 1.7 / camera.aspect))
+          .add(lookAt);
+        camera.lookAt(lookAt);
+        camera.updateProjectionMatrix();
+      }
+      new ResizeObserver(resize).observe(stage);
+      resize();
+
+      let last = performance.now();
+      function frame(now) {
+        const delta = Math.min((now - last) / 1000, 0.1);
+        last = now;
+        match.update(delta);
+        for (const { mesh, body } of table.dice) {
+          mesh.position.copy(body.interpolatedPosition);
+          mesh.quaternion.copy(body.interpolatedQuaternion);
+        }
+        renderer.render(scene, camera);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      match.status = 'Choose a mode to start';
+      render();
+    }
+
+    try {
+      const [THREE, CANNON, { RoundedBoxGeometry }] = await Promise.all([
+        import('three'),
+        import('cannon-es'),
+        import('three/addons/geometries/RoundedBoxGeometry.js')
+      ]);
+      start(THREE, CANNON, RoundedBoxGeometry);
+    } catch (error) {
+      console.error(error);
+      statusLine.textContent = 'Could not load the 3D dice. Check your internet connection and reload.';
+    }
+  </script>
 </body>
 </html>
