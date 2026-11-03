@@ -1,0 +1,487 @@
+<title>Build a Perfect Colony</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Mono:wght@400&display=swap">
+<style>
+  /* Layout: one A3 landscape sheet (420 x 297) of sea seen from above. --mm is one A3 millimetre, so the whole sheet scales as a unit. */
+  :root {
+    color-scheme: dark;
+    --deep: #09333a;
+    --lagoon: #0e464d;
+    --shallows: #145a60;
+    --chalk: #f3efe3;
+    --haze: #b4cec9;
+    --rule: #3a7a7e;
+    --sand: #ecd6a4;
+    --sand-dark: #c9a86e;
+    --stick: #efcf95;
+    --stick-dark: #a97a44;
+    --mud: #b9773f;
+    --mud-dark: #80502a;
+    --leaf: #5fae6e;
+    --leaf-dark: #37804f;
+    --skin: #e8ad82;
+    --skin-dark: #c98a60;
+    --stone: #8fa6a8;
+    --berry: #d9574f;
+    --cloth-a: #e9734f;
+    --cloth-b: #f2c14e;
+    --cloth-c: #4fa3c7;
+    --display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+    --body: "Atkinson Hyperlegible", Verdana, sans-serif;
+    --label: "DM Mono", Menlo, monospace;
+  }
+
+  body { background: var(--deep); color: var(--chalk); font-family: var(--body); }
+
+  .page {
+    max-width: 1680px;
+    margin-inline: auto;
+    padding-block: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  .sheet {
+    --mm: calc(100cqw / 420);
+    container-type: inline-size;
+    aspect-ratio: 420 / 297;
+    background: var(--lagoon);
+    display: grid;
+  }
+
+  .inner {
+    padding: calc(11 * var(--mm)) calc(12 * var(--mm));
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: calc(7 * var(--mm));
+    font-size: calc(4.3 * var(--mm));
+    line-height: 1.42;
+    min-width: 0;
+  }
+
+  svg { display: block; width: 100%; height: auto; }
+  h1, h2, p, dl, dd, ol, ul, figure { margin: 0; }
+  ol, ul { list-style: none; padding: 0; }
+
+  h1 { font-size: 1em; }
+  .title-stacked { display: none; }
+
+  h2 {
+    font: 700 calc(7.6 * var(--mm))/1.15 var(--display);
+    text-wrap: balance;
+  }
+
+  .label {
+    font: 400 calc(3.3 * var(--mm))/1.4 var(--label);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stick);
+  }
+
+  .intro {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: calc(12 * var(--mm));
+    align-items: start;
+  }
+  .tagline {
+    font: 500 calc(6.6 * var(--mm))/1.22 var(--display);
+    text-wrap: balance;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: calc(4 * var(--mm)) calc(8 * var(--mm));
+    padding-top: calc(3 * var(--mm));
+    border-top: 1px solid var(--rule);
+  }
+  .facts div { display: grid; gap: calc(1 * var(--mm)); align-content: start; min-width: 0; }
+
+  .world {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: calc(12 * var(--mm));
+    align-items: start;
+    min-height: 0;
+  }
+  .stack { display: grid; gap: calc(3.5 * var(--mm)); min-width: 0; align-content: start; }
+  .prose { display: grid; gap: calc(2 * var(--mm)); }
+
+  .stages {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: calc(6 * var(--mm));
+    color: var(--haze);
+    font-size: calc(3.9 * var(--mm));
+    counter-reset: stage;
+  }
+  .stages li { counter-increment: stage; display: grid; gap: calc(0.5 * var(--mm)); min-width: 0; align-content: start; }
+  .stages li::before {
+    content: "Stage " counter(stage);
+    font: 400 calc(3.3 * var(--mm))/1.4 var(--label);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stick);
+  }
+
+  .play {
+    background: var(--shallows);
+    padding: calc(7 * var(--mm)) calc(8 * var(--mm)) 0;
+    display: grid;
+    grid-template-columns: minmax(0, 2.3fr) minmax(0, 6.2fr) minmax(0, 3.1fr);
+    gap: calc(9 * var(--mm));
+  }
+  .hands-col { display: grid; gap: calc(3 * var(--mm)); align-content: space-between; min-width: 0; }
+  .table-col { padding-bottom: calc(7 * var(--mm)); min-width: 0; }
+  .why-col { padding-bottom: calc(7 * var(--mm)); display: grid; gap: calc(3 * var(--mm)); align-content: start; min-width: 0; }
+
+  table { width: 100%; border-collapse: collapse; font: inherit; color: inherit; }
+  thead th {
+    text-align: left;
+    font: 400 calc(3.3 * var(--mm))/1.4 var(--label);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stick);
+    padding: 0 calc(4 * var(--mm)) calc(2.2 * var(--mm)) 0;
+  }
+  tbody th, td {
+    padding: calc(2.6 * var(--mm)) calc(4 * var(--mm)) calc(2.6 * var(--mm)) 0;
+    border-top: 1px solid var(--rule);
+    vertical-align: baseline;
+    text-align: left;
+  }
+  tbody th { font: 700 calc(5 * var(--mm))/1.2 var(--display); width: 27%; }
+  td.feel { font: 500 calc(4.6 * var(--mm))/1.2 var(--display); color: var(--stick); width: 22%; padding-right: 0; }
+
+  .why { display: grid; gap: calc(2.4 * var(--mm)); }
+  .why li { display: grid; min-width: 0; }
+  .why strong { font: 700 calc(4.4 * var(--mm))/1.25 var(--display); }
+  .why span { color: var(--haze); font-size: calc(3.8 * var(--mm)); line-height: 1.35; }
+
+  /* Illustration materials */
+  .i-sand { fill: var(--sand); }
+  .i-sand-dark { fill: var(--sand-dark); }
+  .i-foam { fill: none; stroke: var(--haze); stroke-width: 1.2; opacity: 0.45; }
+  .i-leaf { fill: var(--leaf); }
+  .i-leaf-dark { fill: var(--leaf-dark); }
+  .i-mud { fill: var(--mud); }
+  .i-mud-dark { fill: var(--mud-dark); }
+  .i-stick-fill { fill: var(--stick); }
+  .i-dark { fill: var(--deep); }
+  .i-stone { fill: var(--stone); }
+  .i-berry { fill: var(--berry); }
+  .i-skin { fill: var(--skin); }
+  .i-chalk { fill: var(--chalk); }
+  .s-stick { fill: none; stroke: var(--stick); stroke-linecap: round; stroke-linejoin: round; }
+  .s-stick-dark { fill: none; stroke: var(--stick-dark); stroke-linecap: round; stroke-linejoin: round; }
+  .s-mud { fill: none; stroke: var(--mud); stroke-linecap: round; stroke-linejoin: round; }
+  .s-mud-dark { fill: none; stroke: var(--mud-dark); stroke-linecap: round; }
+  .s-skin { fill: none; stroke: var(--skin); stroke-linecap: round; }
+  .s-chalk { fill: none; stroke: var(--chalk); stroke-linecap: round; stroke-linejoin: round; }
+  .c-a { color: var(--cloth-a); }
+  .c-b { color: var(--cloth-b); }
+  .c-c { color: var(--cloth-c); }
+
+  .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  /* Below the width where an A3 sheet stays readable, the sheet unlocks and stacks. */
+  @media (max-width: 1100px) {
+    .sheet { --mm: 0.23rem; aspect-ratio: auto; }
+    .world, .intro { grid-template-columns: minmax(0, 1fr); }
+    .play { grid-template-columns: minmax(0, 1fr); padding-bottom: calc(7 * var(--mm)); }
+    .hands-col svg { max-width: 300px; }
+    .table-col, .why-col { padding-bottom: 0; }
+  }
+  @media (max-width: 760px) {
+    .inner { padding: calc(6 * var(--mm)) calc(5 * var(--mm)); }
+    .play { padding-inline: calc(5 * var(--mm)); }
+    .title-wide { display: none; }
+    .title-stacked { display: block; }
+    .facts, .stages { grid-template-columns: minmax(0, 1fr); }
+    thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    table, tbody, tr, td, tbody th { display: block; width: auto; }
+    tr { display: grid; gap: calc(1 * var(--mm)); padding-block: calc(3 * var(--mm)); border-top: 1px solid var(--rule); }
+    td, tbody th { padding: 0; border: 0; }
+  }
+</style>
+
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <pattern id="bricks" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" class="i-mud"/>
+      <path d="M0 0H20M0 10H20M10 0V10M0 10V20M20 10V20" class="s-mud-dark" stroke-width="1.5"/>
+    </pattern>
+
+    <!-- Title letters: straight strokes are sticks, curved strokes are mud -->
+    <g id="l-b" stroke-width="15"><path class="s-mud" stroke-width="19" d="M8 8H30C60 8 60 48 30 48H8M8 50H34C68 50 68 92 34 92H8"/><path class="s-stick" d="M8 -5V105"/></g>
+    <g id="l-u" stroke-width="15"><path class="s-mud" stroke-width="19" d="M8 64C8 112 62 112 62 64"/><path class="s-stick" d="M8 -5V66M62 -5V66"/></g>
+    <g id="l-i" stroke-width="15"><path class="s-stick" d="M8 -5V105"/></g>
+    <g id="l-l" stroke-width="15"><path class="s-stick" d="M8 -5V105M8 94H60"/></g>
+    <g id="l-d" stroke-width="15"><path class="s-mud" stroke-width="19" d="M8 8H24C80 8 80 92 24 92H8"/><path class="s-stick" d="M8 -5V105"/></g>
+    <g id="l-a" stroke-width="15"><path class="s-stick" d="M2 105L34 -5M66 105L34 -5M8 68H60"/></g>
+    <g id="l-p" stroke-width="15"><path class="s-mud" stroke-width="19" d="M8 8H32C64 8 64 56 32 56H8"/><path class="s-stick" d="M8 -5V105"/></g>
+    <g id="l-e" stroke-width="15"><path class="s-stick" d="M8 8H56M8 50H48M8 92H56M8 -5V105"/></g>
+    <g id="l-r" stroke-width="15"><path class="s-mud" stroke-width="19" d="M8 8H32C64 8 64 56 32 56H8"/><path class="s-stick" d="M34 56L62 105M8 -5V105"/></g>
+    <g id="l-f" stroke-width="15"><path class="s-stick" d="M8 8H54M8 50H44M8 -5V105"/></g>
+    <g id="l-c" stroke-width="15"><path class="s-mud" stroke-width="19" d="M64 20C48 -6 6 0 6 50C6 100 48 106 64 80"/></g>
+    <g id="l-t" stroke-width="15"><path class="s-stick" d="M-3 8H70M34 -5V105"/></g>
+    <g id="l-o" stroke-width="15"><ellipse class="s-mud" stroke-width="19" cx="38" cy="50" rx="30" ry="42"/></g>
+    <g id="l-n" stroke-width="15"><path class="s-stick" d="M8 -3L62 103M8 -5V105M62 -5V105"/></g>
+    <g id="l-y" stroke-width="15"><path class="s-stick" d="M2 -5L34 50M66 -5L34 50M34 46V105"/></g>
+
+    <g id="t-line1">
+      <use href="#l-b" transform="rotate(-1.5 35 50)"/>
+      <use href="#l-u" transform="translate(80 0) rotate(1 35 50)"/>
+      <use href="#l-i" transform="translate(164 0) rotate(-1 8 50)"/>
+      <use href="#l-l" transform="translate(194 0) rotate(1 30 50)"/>
+      <use href="#l-d" transform="translate(262 0) rotate(-1 35 50)"/>
+      <use href="#l-a" transform="translate(372 0) rotate(1 34 50)"/>
+      <use href="#l-p" transform="translate(480 0) rotate(-1 30 50)"/>
+      <use href="#l-e" transform="translate(552 0) rotate(1 30 50)"/>
+      <use href="#l-r" transform="translate(622 0) rotate(-1 32 50)"/>
+      <use href="#l-f" transform="translate(704 0) rotate(1 28 50)"/>
+      <use href="#l-e" transform="translate(768 0) rotate(-1 30 50)"/>
+      <use href="#l-c" transform="translate(836 0) rotate(1 35 50)"/>
+      <use href="#l-t" transform="translate(922 0) rotate(-1 34 50)"/>
+    </g>
+    <g id="t-line2">
+      <use href="#l-c" transform="translate(1036 0) rotate(-1 35 50)"/>
+      <use href="#l-o" transform="translate(1110 0) rotate(1 38 50)"/>
+      <use href="#l-l" transform="translate(1202 0) rotate(-1 30 50)"/>
+      <use href="#l-o" transform="translate(1268 0) rotate(1 38 50)"/>
+      <use href="#l-n" transform="translate(1360 0) rotate(-1 35 50)"/>
+      <use href="#l-y" transform="translate(1442 0) rotate(1 34 50)"/>
+    </g>
+
+    <!-- Scenery -->
+    <g id="island">
+      <ellipse class="i-foam" cx="0" cy="9" rx="108" ry="43"/>
+      <path class="i-sand-dark" d="M-100 8C-98 -16 -50 -32 0 -31C52 -32 100 -14 100 9C100 32 50 44 -2 44C-55 44 -100 32 -100 8Z"/>
+      <path class="i-sand" d="M-100 2C-98 -22 -50 -38 0 -37C52 -38 100 -20 100 3C100 26 50 38 -2 38C-55 38 -100 26 -100 2Z"/>
+    </g>
+
+    <g id="person-base">
+      <path class="s-skin" stroke-width="3.6" d="M-3 -16L-4 -1M3 -16L4 -1"/>
+      <path fill="currentColor" d="M-5 -31H5L7 -13H-7Z"/>
+      <circle class="i-skin" cx="0" cy="-37" r="5.6"/>
+      <path class="i-mud-dark" d="M-5.8 -37A5.8 5.8 0 0 1 5.8 -37C3 -40 -2 -40 -5.8 -37Z"/>
+    </g>
+    <g id="person-stand">
+      <use href="#person-base"/>
+      <path class="s-skin" stroke-width="3" d="M-5 -29L-8 -16M5 -29L8 -16"/>
+    </g>
+    <g id="person-cheer">
+      <path class="s-skin" stroke-width="3" d="M-5 -29L-11 -45M5 -29L11 -45"/>
+      <use href="#person-base"/>
+    </g>
+
+    <g id="palm">
+      <path class="s-stick-dark" stroke-width="6.5" d="M0 0C-3 -28 2 -55 13 -78"/>
+      <g class="i-leaf">
+        <path d="M13 -78C25 -96 48 -96 58 -74C44 -84 28 -84 13 -78Z"/>
+        <path d="M13 -78C2 -98 -24 -100 -38 -80C-22 -88 -4 -86 13 -78Z"/>
+      </g>
+      <g class="i-leaf-dark">
+        <path d="M13 -78C30 -78 44 -66 44 -46C36 -62 26 -72 13 -78Z"/>
+        <path d="M13 -78C-4 -80 -20 -68 -24 -48C-14 -62 -2 -72 13 -78Z"/>
+        <path d="M13 -78C10 -94 16 -106 30 -112C26 -100 22 -88 13 -78Z"/>
+      </g>
+      <circle class="i-mud-dark" cx="9" cy="-73" r="3.6"/>
+      <circle class="i-mud-dark" cx="17" cy="-72" r="3.6"/>
+    </g>
+
+    <g id="hut">
+      <rect x="-23" y="-27" width="46" height="27" fill="url(#bricks)"/>
+      <path class="i-dark" d="M-8 0V-13Q0 -22 8 -13V0Z"/>
+      <path class="i-stick-fill" d="M-32 -24L0 -48L32 -24Z"/>
+      <path class="s-stick-dark" stroke-width="2.2" d="M-37 -21L3 -51M37 -21L-3 -51M-16 -24L-3 -44M16 -24L3 -44"/>
+    </g>
+
+    <g id="tower">
+      <path d="M-23 0V-24H23V0H10V-8Q0 -18 -10 -8V0Z" fill="url(#bricks)"/>
+      <path class="i-stick-fill" d="M-7 -24L-4 -106H4L7 -24Z"/>
+      <path class="s-stick-dark" stroke-width="1.8" d="M-5.5 -44H5.5M-5 -64H5M-4.5 -84H4.5"/>
+      <path class="s-stick" stroke-width="3.5" d="M-20 -119L18 -100M20 -119L-18 -100"/>
+      <path class="s-stick" stroke-width="3" d="M0 -106V-142"/>
+      <path fill="var(--cloth-a)" d="M2 -142L28 -133L2 -124Z"/>
+    </g>
+
+    <g id="bush">
+      <circle class="i-leaf-dark" cx="-16" cy="-14" r="15"/>
+      <circle class="i-leaf-dark" cx="16" cy="-14" r="15"/>
+      <circle class="i-leaf" cx="0" cy="-25" r="19"/>
+      <circle class="i-leaf" cx="-14" cy="-10" r="10"/>
+      <circle class="i-leaf" cx="13" cy="-11" r="11"/>
+      <circle class="i-berry" cx="-9" cy="-28" r="3"/>
+      <circle class="i-berry" cx="8" cy="-20" r="3"/>
+      <circle class="i-berry" cx="-4" cy="-12" r="3"/>
+      <circle class="i-berry" cx="10" cy="-33" r="3"/>
+    </g>
+
+    <g id="fish">
+      <path d="M-22 0L-40 -13V13Z" fill="var(--cloth-c)"/>
+      <path d="M-28 0C-14 -19 18 -20 34 0C18 20 -14 19 -28 0Z" fill="var(--cloth-c)"/>
+      <circle class="i-chalk" cx="20" cy="-4" r="3.2"/>
+      <circle class="i-dark" cx="21" cy="-4" r="1.5"/>
+    </g>
+
+    <g id="hand-back">
+      <path class="i-skin" d="M-17 0L-23 110H23L17 0Z"/>
+      <rect class="i-skin" x="-25" y="-44" width="50" height="50" rx="13"/>
+    </g>
+    <g id="hand-grip" class="i-skin">
+      <rect x="-25" y="-56" width="12" height="32" rx="6"/>
+      <rect x="-12" y="-59" width="12" height="35" rx="6"/>
+      <rect x="1" y="-58" width="12" height="34" rx="6"/>
+      <rect x="14" y="-54" width="11" height="30" rx="5.5"/>
+      <path d="M-13 -54V-28M0 -54V-28M13 -52V-28" fill="none" stroke="var(--skin-dark)" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+  </defs>
+</svg>
+
+<div class="page">
+  <article class="sheet">
+    <div class="inner">
+      <h1 aria-label="Build a Perfect Colony">
+        <svg class="title-wide" viewBox="-8 -12 1536 126" role="img" aria-label="Build a Perfect Colony">
+          <use href="#t-line1"/><use href="#t-line2"/>
+        </svg>
+        <svg class="title-stacked" viewBox="-8 -12 1016 372" role="img" aria-label="Build a Perfect Colony">
+          <use href="#t-line1"/>
+          <use href="#t-line2" transform="translate(-2072 132) scale(2)"/>
+        </svg>
+      </h1>
+
+      <div class="intro">
+        <p class="tagline">Play god over a tiny island colony. Make tools from sticks and mud, and make their lives better.</p>
+        <dl class="facts">
+          <div><dt class="label">Genre</dt><dd>Creativity: sticks and mud</dd></div>
+          <div><dt class="label">Platform</dt><dd>Virtual reality, Oculus Quest</dd></div>
+          <div><dt class="label">Audience</dt><dd>College-age men interested in science</dd></div>
+        </dl>
+      </div>
+
+      <div class="world">
+        <section class="stack" id="concept">
+          <h2>You watch over them from above</h2>
+          <div class="prose">
+            <p>A small group of people is stranded on a deserted island. You take the role of their god, looking down from a bird's-eye view in VR.</p>
+            <p>Your goal is to create as many tools as you can that raise the colony's quality of life. Mud and trees give you your main materials, bricks and sticks.</p>
+          </div>
+          <svg viewBox="0 0 560 212" role="img" aria-label="An island where one person pokes a fish with a spear, another shakes a berry bush, and a brick house stands on the far side, with a pile of sticks and a mud pit in the middle.">
+            <g id="scene-island" transform="translate(290 118) scale(2.4 1.72)"><use href="#island"/></g>
+            <g id="scene-mud"><ellipse class="i-mud-dark" cx="300" cy="150" rx="46" ry="15"/><ellipse class="i-mud" cx="300" cy="148" rx="40" ry="11"/></g>
+            <g id="scene-sticks" class="s-stick-dark" stroke-width="5"><path d="M246 112L300 100M250 100L298 114M258 92L286 118"/></g>
+            <g id="scene-fish">
+              <use href="#fish" transform="translate(56 34) rotate(-14)"/>
+              <path class="s-chalk" stroke-width="2" opacity="0.7" d="M22 74Q38 64 54 74M62 66Q74 58 86 66"/>
+              <use href="#person-stand" class="c-a" transform="translate(150 86) scale(1.3)"/>
+              <path class="s-stick" stroke-width="3.5" d="M152 42L92 32"/>
+              <path class="i-stone" d="M92 32L78 26L80 37Z"/>
+              <path class="s-skin" stroke-width="3.8" d="M144 50L128 38"/>
+            </g>
+            <g id="scene-bush">
+              <use href="#bush" transform="translate(116 158) scale(1.3)"/>
+              <use href="#person-stand" class="c-c" transform="translate(180 172) scale(1.3)"/>
+              <path class="s-skin" stroke-width="3.8" d="M172 136L148 128"/>
+              <path class="s-chalk" stroke-width="2" opacity="0.8" d="M80 112Q74 122 80 132M70 118Q66 124 70 130"/>
+            </g>
+            <g id="scene-house" transform="translate(442 136)">
+              <path d="M-52 0V-64Q-52 -78 -38 -78H38Q52 -78 52 -64V0Z" fill="url(#bricks)"/>
+              <path class="i-dark" d="M-15 0V-32Q0 -48 15 -32V0Z"/>
+              <path class="s-stick" stroke-width="4.5" d="M-22 -44H22"/>
+            </g>
+          </svg>
+        </section>
+
+        <section class="stack" id="growth">
+          <h2>Every tool grows the colony</h2>
+          <svg viewBox="0 0 760 256" role="img" aria-label="Three islands in sequence joined by arrows. The first has two castaways and a palm tree. The second has a family and two huts. The third has a cheering group and a tall tower.">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M1 1L8 5L1 9" class="s-chalk" stroke-width="1.8"/>
+              </marker>
+            </defs>
+            <g id="stage-1" transform="translate(127 192) scale(0.88)">
+              <use href="#island"/>
+              <use href="#palm" transform="translate(42 6) scale(1.15)"/>
+              <use href="#person-stand" class="c-a" transform="translate(-44 2) scale(1.15)"/>
+              <use href="#person-stand" class="c-c" transform="translate(-16 10) scale(1.15)"/>
+            </g>
+            <path class="s-chalk" stroke-width="3" marker-end="url(#arrow)" d="M205 88Q250 36 296 96"/>
+            <g id="stage-2" transform="translate(380 192)">
+              <use href="#island"/>
+              <use href="#hut" transform="translate(14 -2) scale(0.95)"/>
+              <use href="#hut" transform="translate(64 6) scale(0.95)"/>
+              <use href="#person-stand" class="c-a" transform="translate(-72 -2) scale(1.05)"/>
+              <use href="#person-stand" class="c-b" transform="translate(-53 7) scale(0.62)"/>
+              <use href="#person-stand" class="c-c" transform="translate(-34 2) scale(1.05)"/>
+            </g>
+            <path class="s-chalk" stroke-width="3" marker-end="url(#arrow)" d="M462 88Q503 36 544 92"/>
+            <g id="stage-3" transform="translate(633 192) scale(1.1)">
+              <use href="#island"/>
+              <use href="#tower" transform="translate(50 4)"/>
+              <use href="#person-cheer" class="c-a" transform="translate(-76 2)"/>
+              <use href="#person-cheer" class="c-b" transform="translate(-52 12)"/>
+              <use href="#person-cheer" class="c-c" transform="translate(-30 -2)"/>
+              <use href="#person-cheer" class="c-a" transform="translate(-8 12)"/>
+            </g>
+          </svg>
+          <ol class="stages">
+            <li><span>Two castaways and a palm tree.</span></li>
+            <li><span>A family with a child, living in two huts with stick roofs.</span></li>
+            <li><span>A bigger group celebrating under a tall tower.</span></li>
+          </ol>
+        </section>
+      </div>
+
+      <div class="play">
+        <div class="hands-col">
+          <h2 id="play">Four things you do with your hands</h2>
+          <svg viewBox="0 0 300 196" role="img" aria-label="Two raised hands. One grips a mud brick, the other grips a forked stick with a stone blade.">
+            <g id="hand-brick" transform="translate(84 112) rotate(-6)">
+              <use href="#hand-back"/>
+              <rect class="i-mud" x="-50" y="-92" width="100" height="56" rx="4"/>
+              <path class="s-mud-dark" stroke-width="2" d="M-50 -64H50M-18 -92V-64M20 -92V-64M2 -64V-36"/>
+              <use href="#hand-grip"/>
+            </g>
+            <g id="hand-tool" transform="translate(218 118) rotate(7)">
+              <use href="#hand-back"/>
+              <path class="s-stick" stroke-width="10" d="M60 -8L-66 -72M-28 -52L-10 -92"/>
+              <path class="i-stone" d="M-14 -88L-34 -112L-14 -130L4 -96Z"/>
+              <path class="s-stick-dark" stroke-width="2.4" d="M-20 -86L0 -94M-22 -92L-2 -100"/>
+              <use href="#hand-grip"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="table-col">
+          <table>
+            <thead>
+              <tr><th scope="col">Interaction</th><th scope="col">How you do it</th><th scope="col">What you feel</th></tr>
+            </thead>
+            <tbody>
+              <tr id="give-roles"><th scope="row">Give roles</th><td>Grab a human with your hand and drop them in a work area.</td><td class="feel">Strategy</td></tr>
+              <tr id="explore-tools"><th scope="row">Explore tools</th><td>Try different combinations of sticks and bricks.</td><td class="feel">Curiosity</td></tr>
+              <tr id="find-food"><th scope="row">Find food</th><td>Shake the bushes around the island, or poke fish.</td><td class="feel">Care</td></tr>
+              <tr id="build-island"><th scope="row">Build the island</th><td>Assemble sticks and bricks the way you want.</td><td class="feel">Sandbox creativity</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <section class="why-col" id="audience">
+          <p class="label">Why it suits people who like science</p>
+          <ul class="why">
+            <li><strong>You experiment</strong><span>Combine a stick and a brick, see what you get, then change one part and try again.</span></li>
+            <li><strong>You observe</strong><span>You study a small population from above and see how each tool changes daily life.</span></li>
+            <li><strong>You make</strong><span>VR puts the stick and the mud in your own hands while you work out what they could become.</span></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </article>
+</div>

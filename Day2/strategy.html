@@ -1,0 +1,904 @@
+<title>Perfect Colony Strategy</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Mono:wght@400&display=swap">
+<style>
+  /* Layout: a status header over one full-screen island, seen from above. Same sea and materials as the A3 one-pager. */
+  :root {
+    color-scheme: dark;
+    --deep: #09333a;
+    --lagoon: #0e464d;
+    --shallows: #145a60;
+    --chalk: #f3efe3;
+    --haze: #b4cec9;
+    --rule: #3a7a7e;
+    --sand: #ecd6a4;
+    --sand-dark: #c9a86e;
+    --stick: #efcf95;
+    --stick-dark: #a97a44;
+    --mud: #b9773f;
+    --mud-dark: #80502a;
+    --leaf: #5fae6e;
+    --leaf-dark: #37804f;
+    --skin: #e8ad82;
+    --stone: #8fa6a8;
+    --berry: #d9574f;
+    --cloth-a: #e9734f;
+    --cloth-b: #f2c14e;
+    --cloth-c: #4fa3c7;
+    --display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+    --body: "Atkinson Hyperlegible", Verdana, sans-serif;
+    --label: "DM Mono", Menlo, monospace;
+  }
+
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--lagoon);
+    color: var(--chalk);
+    font: 400 0.9375rem/1.35 var(--body);
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .app { height: 100%; display: flex; flex-direction: column; }
+
+  .status {
+    background: var(--deep);
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr) auto;
+    gap: 10px 24px;
+    align-items: center;
+  }
+
+  .res { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 0 8px; align-items: center; min-width: 0; }
+  .res svg { grid-row: span 2; width: 34px; height: 34px; display: block; }
+  .res-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .res-num {
+    font: 700 1.5rem/1.1 var(--display);
+    font-variant-numeric: tabular-nums;
+    display: inline-block;
+  }
+  .res-num.bump { animation: bump 0.28s ease-out; }
+  .res-name { font: 400 0.75rem/1.3 var(--label); letter-spacing: 0.06em; text-transform: uppercase; color: var(--stick); }
+  .res-note { color: var(--haze); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .colony { display: grid; gap: 4px; min-width: 0; }
+  .colony-top { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; }
+  .colony-top b { font: 700 1.0625rem/1.2 var(--display); font-variant-numeric: tabular-nums; }
+  .meal { display: flex; align-items: center; gap: 8px; color: var(--haze); font-size: 0.8125rem; }
+  .meal-track { flex: 1; height: 6px; background: var(--shallows); overflow: hidden; min-width: 40px; }
+  .meal-fill { height: 100%; width: 100%; background: var(--stick); transform-origin: left; }
+  .meal-label { white-space: nowrap; }
+  .hungry { color: var(--deep); background: var(--cloth-a); padding: 0 6px; font-weight: 700; font-size: 0.8125rem; }
+
+  button {
+    font: inherit;
+    color: var(--deep);
+    background: var(--stick);
+    border: 0;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--chalk); }
+  button:disabled { background: var(--shallows); color: var(--haze); cursor: not-allowed; }
+  button:focus-visible, .human:focus-visible { outline: 3px solid var(--chalk); outline-offset: 2px; }
+  #build { min-width: 132px; text-align: left; }
+  #build b { display: block; font: 700 1rem/1.2 var(--display); }
+  #build span { font-size: 0.8125rem; }
+
+  .stage { flex: 1; min-height: 0; position: relative; }
+  #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; overflow: hidden; user-select: none; -webkit-user-select: none; }
+
+  .hint {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 32px);
+    width: max-content;
+    background: var(--deep);
+    padding: 6px 12px;
+    pointer-events: none;
+    text-align: center;
+  }
+  .toast {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 32px);
+    width: max-content;
+    background: var(--chalk);
+    color: var(--deep);
+    padding: 6px 12px;
+    pointer-events: none;
+    text-align: center;
+  }
+  .foot {
+    position: absolute;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    color: var(--haze);
+    font-size: 0.8125rem;
+    pointer-events: none;
+  }
+  .foot button { pointer-events: auto; background: var(--deep); color: var(--chalk); padding: 4px 10px; font-size: 0.8125rem; }
+  .foot button:hover { background: var(--shallows); }
+
+  .win {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: color-mix(in srgb, var(--deep) 60%, transparent);
+  }
+  .win-card { background: var(--deep); padding: 24px; display: grid; gap: 12px; max-width: 26rem; }
+  .win-card h2 { margin: 0; font: 700 1.75rem/1.15 var(--display); text-wrap: balance; }
+  .win-card p { margin: 0; color: var(--haze); }
+  .win-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .win-actions .quiet { background: var(--shallows); color: var(--chalk); }
+
+  /* Scene materials */
+  .i-sand { fill: var(--sand); }
+  .i-sand-dark { fill: var(--sand-dark); }
+  .i-foam { fill: none; stroke: var(--haze); stroke-width: 2; opacity: 0.4; }
+  .i-leaf { fill: var(--leaf); }
+  .i-leaf-dark { fill: var(--leaf-dark); }
+  .i-mud { fill: var(--mud); }
+  .i-mud-dark { fill: var(--mud-dark); }
+  .i-stick-fill { fill: var(--stick); }
+  .i-dark { fill: var(--deep); }
+  .i-stone { fill: var(--stone); }
+  .i-berry { fill: var(--berry); }
+  .i-skin { fill: var(--skin); }
+  .i-chalk { fill: var(--chalk); }
+  .i-fish { fill: var(--cloth-c); }
+  .s-stick { fill: none; stroke: var(--stick); stroke-linecap: round; }
+  .s-stick-dark { fill: none; stroke: var(--stick-dark); stroke-linecap: round; stroke-linejoin: round; }
+  .s-mud-dark { fill: none; stroke: var(--mud-dark); stroke-linecap: round; }
+  .s-skin { fill: none; stroke: var(--skin); stroke-linecap: round; }
+  .s-chalk { fill: none; stroke: var(--chalk); stroke-linecap: round; }
+
+  .zone-area { fill: var(--chalk); fill-opacity: 0; stroke: var(--stick-dark); stroke-width: 2.5; stroke-dasharray: 3 11; stroke-linecap: round; }
+  .dragging .zone-area { stroke: var(--deep); fill-opacity: 0.1; }
+  .zone.hover .zone-area { fill-opacity: 0.45; stroke: var(--deep); stroke-dasharray: none; }
+  .zone.full .zone-area { stroke: var(--cloth-a); }
+  .zone-pill { fill: var(--deep); }
+  .zone-text { fill: var(--chalk); font: 700 19px var(--display); text-anchor: middle; pointer-events: none; }
+  .zone-count { fill: var(--stick); font: 400 15px var(--label); text-anchor: middle; pointer-events: none; }
+
+  .plot { fill: none; stroke: var(--sand-dark); stroke-width: 3; stroke-dasharray: 3 10; stroke-linecap: round; }
+
+  .human { cursor: grab; outline: none; }
+  .dragging, .dragging .human { cursor: grabbing; }
+  .human-shadow { fill: var(--sand-dark); opacity: 0.8; }
+  .bar-bg { fill: var(--deep); }
+  .bar-fg { fill: var(--stick); }
+
+  .float {
+    font: 700 22px var(--display);
+    text-anchor: middle;
+    fill: var(--deep);
+    paint-order: stroke;
+    stroke: var(--chalk);
+    stroke-width: 4px;
+    pointer-events: none;
+    animation: rise 1.1s ease-out forwards;
+  }
+  .plot-built { animation: pop 0.35s ease-out; transform-box: fill-box; transform-origin: 50% 100%; }
+
+  @keyframes rise { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-44px); opacity: 0; } }
+  @keyframes bump { 50% { transform: scale(1.3); } }
+  @keyframes pop { from { transform: scale(0.4); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .float { animation-duration: 0.01s; }
+    .res-num.bump, .plot-built { animation: none; }
+  }
+
+  @media (max-width: 980px) {
+    .status { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; }
+    .colony { grid-column: 1 / span 3; }
+    #build { min-width: 0; }
+    .res-note { display: none; }
+  }
+  @media (max-width: 560px) {
+    body { font-size: 0.875rem; }
+    .status { padding-block: 8px; gap: 6px 8px; }
+    .res { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 0; }
+    .res svg { grid-row: auto; width: 24px; height: 24px; }
+    .res-top { display: grid; gap: 0; }
+    .res-name { font-size: 0.625rem; letter-spacing: 0.02em; }
+    .res-num { font-size: 1.25rem; }
+    .keys { display: none; }
+    .foot { justify-content: flex-end; }
+  }
+</style>
+
+<div class="app">
+  <header class="status" aria-label="Colony status">
+    <div class="res" id="res-wood">
+      <svg viewBox="-20 -20 40 40" aria-hidden="true"><path class="s-stick-dark" stroke-width="8" d="M-14 8L14 2"/><path class="s-stick" stroke-width="8" d="M-14 -6L14 -10"/></svg>
+      <div class="res-top"><span class="res-num">0</span><span class="res-name">Wood</span></div>
+      <div class="res-note"></div>
+    </div>
+    <div class="res" id="res-berries">
+      <svg viewBox="-20 -20 40 40" aria-hidden="true"><circle class="i-leaf" cx="0" cy="-2" r="16"/><circle class="i-berry" cx="-6" cy="-7" r="4.5"/><circle class="i-berry" cx="7" cy="-3" r="4.5"/><circle class="i-berry" cx="-2" cy="6" r="4.5"/></svg>
+      <div class="res-top"><span class="res-num">0</span><span class="res-name">Berries</span></div>
+      <div class="res-note"></div>
+    </div>
+    <div class="res" id="res-fish">
+      <svg viewBox="-44 -24 84 48" aria-hidden="true"><use href="#fish"/></svg>
+      <div class="res-top"><span class="res-num">0</span><span class="res-name">Fish</span></div>
+      <div class="res-note"></div>
+    </div>
+    <div class="res" id="res-bricks">
+      <svg viewBox="-20 -20 40 40" aria-hidden="true"><rect class="i-mud" x="-17" y="-11" width="34" height="22" rx="2"/><path class="s-mud-dark" stroke-width="2" d="M-17 0H17M-5 -11V0M6 0V11"/></svg>
+      <div class="res-top"><span class="res-num">0</span><span class="res-name">Bricks</span></div>
+      <div class="res-note"></div>
+    </div>
+    <div class="colony">
+      <div class="colony-top">
+        <span><b id="people">4</b> villagers</span>
+        <span><b id="huts">0</b> of 3 huts</span>
+        <span class="hungry" id="hungry" hidden>Hungry: half speed</span>
+      </div>
+      <div class="meal">
+        <span class="meal-label" id="meal-label">Next meal</span>
+        <div class="meal-track"><div class="meal-fill" id="meal-fill"></div></div>
+      </div>
+    </div>
+    <button id="build" type="button"><b>Build hut</b><span id="build-cost"></span></button>
+  </header>
+
+  <main class="stage" id="stage">
+    <svg id="scene" role="application" aria-label="Island with four work areas. Drag villagers onto a work area to give them a job.">
+      <defs>
+        <pattern id="bricks" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" class="i-mud"/>
+          <path d="M0 0H20M0 10H20M10 0V10M0 10V20M20 10V20" class="s-mud-dark" stroke-width="1.5"/>
+        </pattern>
+        <path id="island-top" class="i-sand" d="M-100 2C-98 -22 -50 -38 0 -37C52 -38 100 -20 100 3C100 26 50 38 -2 38C-55 38 -100 26 -100 2Z"/>
+        <path id="island-under" class="i-sand-dark" d="M-100 7C-98 -17 -50 -33 0 -32C52 -33 100 -15 100 8C100 31 50 43 -2 43C-55 43 -100 31 -100 7Z"/>
+        <g id="palm">
+          <path class="s-stick-dark" stroke-width="6.5" d="M0 0C-3 -28 2 -55 13 -78"/>
+          <g class="i-leaf">
+            <path d="M13 -78C25 -96 48 -96 58 -74C44 -84 28 -84 13 -78Z"/>
+            <path d="M13 -78C2 -98 -24 -100 -38 -80C-22 -88 -4 -86 13 -78Z"/>
+          </g>
+          <g class="i-leaf-dark">
+            <path d="M13 -78C30 -78 44 -66 44 -46C36 -62 26 -72 13 -78Z"/>
+            <path d="M13 -78C-4 -80 -20 -68 -24 -48C-14 -62 -2 -72 13 -78Z"/>
+            <path d="M13 -78C10 -94 16 -106 30 -112C26 -100 22 -88 13 -78Z"/>
+          </g>
+        </g>
+        <g id="bush">
+          <circle class="i-leaf-dark" cx="-16" cy="-14" r="15"/>
+          <circle class="i-leaf-dark" cx="16" cy="-14" r="15"/>
+          <circle class="i-leaf" cx="0" cy="-25" r="19"/>
+          <circle class="i-leaf" cx="-14" cy="-10" r="10"/>
+          <circle class="i-leaf" cx="13" cy="-11" r="11"/>
+        </g>
+        <g id="hut">
+          <rect x="-23" y="-27" width="46" height="27" fill="url(#bricks)"/>
+          <path class="i-dark" d="M-8 0V-13Q0 -22 8 -13V0Z"/>
+          <path class="i-stick-fill" d="M-32 -24L0 -48L32 -24Z"/>
+          <path class="s-stick-dark" stroke-width="2.2" d="M-37 -21L3 -51M37 -21L-3 -51M-16 -24L-3 -44M16 -24L3 -44"/>
+        </g>
+        <g id="fish">
+          <path class="i-fish" d="M-22 0L-40 -13V13Z"/>
+          <path class="i-fish" d="M-28 0C-14 -19 18 -20 34 0C18 20 -14 19 -28 0Z"/>
+          <circle class="i-chalk" cx="20" cy="-4" r="3.2"/>
+          <circle class="i-dark" cx="21" cy="-4" r="1.5"/>
+        </g>
+        <g id="person-base">
+          <path class="s-skin" stroke-width="3.6" d="M-3 -16L-4 -1M3 -16L4 -1"/>
+          <path fill="currentColor" d="M-5 -31H5L7 -13H-7Z"/>
+          <circle class="i-skin" cx="0" cy="-37" r="5.6"/>
+          <path class="i-mud-dark" d="M-5.8 -37A5.8 5.8 0 0 1 5.8 -37C3 -40 -2 -40 -5.8 -37Z"/>
+          <path class="s-skin" stroke-width="3" d="M-5 -29L-8 -16"/>
+        </g>
+      </defs>
+      <ellipse class="i-foam" id="foam"/>
+      <use href="#island-under" id="under"/>
+      <use href="#island-top" id="top"/>
+      <g id="plots"></g>
+      <g id="zones"></g>
+      <g id="sea-fish"></g>
+      <g id="humans"></g>
+      <g id="floats"></g>
+    </svg>
+    <div class="hint" id="hint">Grab a villager and drop them on a job.</div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <div class="foot">
+      <span class="keys">Keyboard: Tab to a villager, then press 1 Chop, 2 Search, 3 Hunt, 4 Bricks, 0 Rest.</span>
+      <button id="restart" type="button">Start over</button>
+    </div>
+    <div class="win" id="win" hidden>
+      <div class="win-card" role="dialog" aria-labelledby="win-title">
+        <h2 id="win-title">You built a perfect colony</h2>
+        <p id="win-text"></p>
+        <div class="win-actions">
+          <button id="again" type="button">Play again</button>
+          <button id="keep" class="quiet" type="button">Keep watching</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const CLOTH = ["var(--cloth-a)", "var(--cloth-c)", "var(--cloth-b)", "var(--leaf-dark)"];
+  const MEAL_EVERY = 12, BUSH_MAX = 12, BUSH_REGROW = 5, SLOTS = 3, WALK = 170, HUTS = 3;
+  const HUT_COST = [6, 8, 10];
+
+  // One job per resource. Time is seconds per unit for one villager.
+  const JOBS = {
+    wood:    { key: "1", name: "Chop wood",     res: "wood",    time: 3,   label: "+1 wood" },
+    berries: { key: "2", name: "Search bushes", res: "berries", time: 2.5, label: "+1 berry" },
+    fish:    { key: "3", name: "Hunt fish",     res: "fish",    time: 4.5, label: "+1 fish" },
+    bricks:  { key: "4", name: "Make bricks",   res: "bricks",  time: 4,   label: "+1 brick" }
+  };
+
+  const LAYOUTS = {
+    wide: {
+      w: 1200, h: 700, island: [600, 362, 5.2, 7.2], camp: [610, 400], zoneR: [130, 104], hutScale: 1.8,
+      zones: { wood: [290, 235], berries: [285, 500], fish: [1000, 240], bricks: [910, 500] },
+      plots: [[490, 205], [610, 190], [730, 205]], sea: [1148, 215], faceSea: 1
+    },
+    tall: {
+      w: 760, h: 1040, island: [380, 505, 3.5, 11.6], camp: [380, 510], zoneR: [122, 104], hutScale: 1.35,
+      zones: { wood: [205, 330], berries: [205, 720], fish: [545, 330], bricks: [555, 720] },
+      plots: [[270, 185], [380, 165], [490, 185]], sea: [712, 175], faceSea: 1
+    }
+  };
+
+  const $ = id => document.getElementById(id);
+  const svg = $("scene"), stage = $("stage");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function el(tag, attrs, parent) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+
+  let L = LAYOUTS.wide;
+  let S, humans = [], drag = null, zoneEls = {}, plotEls = [], berryEls = [], brickEls = [], woodEls = [], rackEls = [];
+  let seaFish, toastTimer, lastSort = 0;
+
+  /* Scenery */
+  function buildZones() {
+    const root = $("zones");
+    root.textContent = "";
+    zoneEls = {}; berryEls = []; brickEls = []; woodEls = []; rackEls = [];
+    for (const id in JOBS) {
+      const g = el("g", { class: "zone", "data-zone": id }, root);
+      const area = el("ellipse", { class: "zone-area", cx: 0, cy: 0 }, g);
+      const art = el("g", {}, g);
+      drawZoneArt(id, art);
+      const pill = el("rect", { class: "zone-pill", x: -86, y: 0, width: 172, height: 48 }, g);
+      const text = el("text", { class: "zone-text", x: 0, y: 0 }, g);
+      text.textContent = JOBS[id].name;
+      const count = el("text", { class: "zone-count", x: 0, y: 0 }, g);
+      zoneEls[id] = { g, area, pill, text, count };
+    }
+    const planted = $("sea-fish");
+    planted.textContent = "";
+    seaFish = el("g", {}, planted);
+    el("use", { href: "#fish", transform: "scale(1.15)" }, seaFish);
+    const waves = el("path", { class: "s-chalk", "stroke-width": 2.5, opacity: 0.6, d: "M-46 34Q-30 24 -14 34M6 42Q22 32 38 42" }, planted);
+    seaFish.waves = waves;
+  }
+
+  function drawZoneArt(id, g) {
+    if (id === "wood") {
+      el("use", { href: "#palm", transform: "translate(-62 -12) scale(1.15)" }, g);
+      el("use", { href: "#palm", transform: "translate(40 -34) scale(1.05)" }, g);
+      for (let i = 0; i < 8; i++) {
+        const y = -4 + (i % 2 ? 0 : 7) - Math.floor(i / 2) * 7;
+        woodEls.push(el("path", { class: i % 2 ? "s-stick" : "s-stick-dark", "stroke-width": 6, d: `M${62} ${y}L${100} ${y - 3}` }, g));
+      }
+    } else if (id === "berries") {
+      el("use", { href: "#bush", transform: "translate(-52 -8) scale(1.6)" }, g);
+      el("use", { href: "#bush", transform: "translate(48 -18) scale(1.6)" }, g);
+      const spots = [[-66, -50], [-48, -42], [-30, -30], [-62, -28], [-40, -58], [-80, -24], [34, -60], [52, -48], [66, -38], [40, -34], [60, -66], [26, -40]];
+      spots.forEach(p => berryEls.push(el("circle", { class: "i-berry", cx: p[0], cy: p[1], r: 5 }, g)));
+    } else if (id === "fish") {
+      el("path", { class: "s-stick-dark", "stroke-width": 5, d: "M-68 2V-50M-8 2V-50M-74 -46H-2" }, g);
+      for (let i = 0; i < 4; i++) {
+        rackEls.push(el("use", { href: "#fish", transform: `translate(${-58 + i * 15} -30) rotate(90) scale(0.4)` }, g));
+      }
+    } else if (id === "bricks") {
+      el("ellipse", { class: "i-mud-dark", cx: -28, cy: -12, rx: 70, ry: 26 }, g);
+      el("ellipse", { class: "i-mud", cx: -28, cy: -15, rx: 60, ry: 19 }, g);
+      for (let i = 0; i < 12; i++) {
+        const row = Math.floor(i / 3), col = i % 3;
+        const r = el("rect", { fill: "url(#bricks)", stroke: "var(--mud-dark)", "stroke-width": 1.5, x: 50 + col * 21 + (row % 2) * 4, y: -12 - row * 12, width: 20, height: 11 }, g);
+        brickEls.push(r);
+      }
+    }
+  }
+
+  function buildPlots() {
+    const root = $("plots");
+    root.textContent = "";
+    plotEls = L.plots.map(() => el("g", {}, root));
+    drawPlots();
+  }
+
+  function drawPlots() {
+    plotEls.forEach((g, i) => {
+      g.textContent = "";
+      const p = L.plots[i];
+      g.setAttribute("transform", `translate(${p[0]} ${p[1]}) scale(${L.hutScale})`);
+      if (i < S.huts) {
+        el("use", { href: "#hut", class: i === S.huts - 1 && S.justBuilt ? "plot-built" : "" }, g);
+      } else {
+        el("ellipse", { class: "plot", cx: 0, cy: -2, rx: 28, ry: 11, "vector-effect": "non-scaling-stroke" }, g);
+      }
+    });
+    S.justBuilt = false;
+  }
+
+  function applyLayout(name) {
+    L = LAYOUTS[name];
+    svg.setAttribute("viewBox", `0 0 ${L.w} ${L.h}`);
+    const [cx, cy, sx, sy] = L.island;
+    const t = `translate(${cx} ${cy}) scale(${sx} ${sy})`;
+    $("under").setAttribute("transform", t);
+    $("top").setAttribute("transform", t);
+    const foam = $("foam");
+    foam.setAttribute("cx", cx); foam.setAttribute("cy", cy + 9 * sy);
+    foam.setAttribute("rx", 108 * sx); foam.setAttribute("ry", 43 * sy);
+    for (const id in zoneEls) {
+      const z = zoneEls[id], [zx, zy] = L.zones[id], [rx, ry] = L.zoneR;
+      z.g.setAttribute("transform", `translate(${zx} ${zy})`);
+      z.area.setAttribute("rx", rx); z.area.setAttribute("ry", ry);
+      const py = ry - 4;
+      z.pill.setAttribute("y", py); z.text.setAttribute("y", py + 20); z.count.setAttribute("y", py + 39);
+    }
+    seaFish.parentNode.setAttribute("transform", `translate(${L.sea[0]} ${L.sea[1]})`);
+    buildPlots();
+    humans.forEach(h => {
+      if (h.job) {
+        const p = slotPos(h.job, h.slot);
+        h.x = p[0]; h.y = p[1]; h.tx = p[0]; h.ty = p[1];
+      } else {
+        const p = campSpot();
+        h.x = p[0]; h.y = p[1]; h.tx = p[0]; h.ty = p[1];
+      }
+    });
+  }
+
+  function chooseLayout() {
+    const r = stage.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const name = r.width / r.height < 0.95 ? "tall" : "wide";
+    if (LAYOUTS[name] !== L || !svg.getAttribute("viewBox")) applyLayout(name);
+  }
+
+  function slotPos(job, slot) {
+    const [zx, zy] = L.zones[job];
+    const off = [[-62, 30], [2, 52], [64, 28]][slot];
+    return [zx + off[0], zy + off[1]];
+  }
+
+  function campSpot() {
+    const a = Math.random() * Math.PI * 2, r = Math.random();
+    return [L.camp[0] + Math.cos(a) * r * 95, L.camp[1] + Math.sin(a) * r * 55];
+  }
+
+  /* Villagers */
+  function addHuman(job, slot, x, y) {
+    const i = humans.length;
+    const p = x === undefined ? campSpot() : [x, y];
+    const g = el("g", { class: "human", tabindex: 0, role: "button" }, $("humans"));
+    g.style.color = CLOTH[i % CLOTH.length];
+    const shadow = el("ellipse", { class: "human-shadow", cx: 0, cy: 0, rx: 19, ry: 7 }, g);
+    const fig = el("g", {}, g);
+    el("use", { href: "#person-base" }, fig);
+    const arm = el("g", {}, fig);
+    el("path", { class: "s-skin", "stroke-width": 3, d: "M0 0L3 13" }, arm);
+    const tool = el("g", {}, arm);
+    const barBg = el("rect", { class: "bar-bg", x: -24, y: -100, width: 48, height: 8 }, g);
+    const barFg = el("rect", { class: "bar-fg", x: -23, y: -99, width: 0, height: 6 }, g);
+    el("circle", { cx: 0, cy: -38, r: 46, fill: "transparent" }, g);
+    const h = { i, g, shadow, fig, arm, tool, barBg, barFg, x: p[0], y: p[1], tx: p[0], ty: p[1], job: null, slot: -1, progress: 0, phase: Math.random() * 6, idleFor: 1 + Math.random() * 3, lift: 0, face: 1, moving: false, toolFor: null };
+    g.addEventListener("keydown", e => onKey(e, h));
+    humans.push(h);
+    if (job) assign(h, job, slot);
+    label(h);
+    return h;
+  }
+
+  function label(h) {
+    const what = h.job ? JOBS[h.job].name : "resting";
+    h.g.setAttribute("aria-label", `Villager ${h.i + 1}, ${what}. Press 1 to 4 for a job, 0 to rest.`);
+  }
+
+  function setTool(h) {
+    if (h.toolFor === h.job) return;
+    h.toolFor = h.job;
+    h.tool.textContent = "";
+    if (h.job === "wood") {
+      el("path", { class: "s-stick", "stroke-width": 2.4, d: "M3 13L14 -8" }, h.tool);
+      el("path", { class: "i-stone", d: "M10 -12L20 -8L15 0L8 -5Z" }, h.tool);
+    } else if (h.job === "fish") {
+      el("path", { class: "s-stick", "stroke-width": 2.2, d: "M-3 -4L16 48" }, h.tool);
+      el("path", { class: "i-stone", d: "M13 47L19 46L20 58Z" }, h.tool);
+    } else if (h.job === "bricks") {
+      el("rect", { class: "i-mud", x: -1, y: 11, width: 13, height: 7, rx: 1 }, h.tool);
+    }
+  }
+
+  function assign(h, job, preferred) {
+    const taken = humans.filter(o => o !== h && o.job === job).map(o => o.slot);
+    let slot = preferred >= 0 && !taken.includes(preferred) ? preferred : -1;
+    if (slot < 0) for (let s = 0; s < SLOTS; s++) if (!taken.includes(s)) { slot = s; break; }
+    if (slot < 0) return false;
+    h.job = job; h.slot = slot; h.progress = 0;
+    const p = slotPos(job, slot);
+    h.tx = p[0]; h.ty = p[1];
+    setTool(h); label(h); refresh();
+    return true;
+  }
+
+  function unassign(h) {
+    h.job = null; h.slot = -1; h.progress = 0; h.idleFor = 2 + Math.random() * 3;
+    setTool(h); label(h); refresh();
+  }
+
+  function onKey(e, h) {
+    const job = Object.keys(JOBS).find(j => JOBS[j].key === e.key);
+    if (job) {
+      if (h.job === job) return;
+      if (freeSlots(job) <= 0) { toast(`${JOBS[job].name} is full. Move someone out first.`); return; }
+      unassign(h); assign(h, job); hideHint(); e.preventDefault();
+    } else if (e.key === "0") {
+      unassign(h);
+      const p = campSpot(); h.tx = p[0]; h.ty = p[1];
+      e.preventDefault();
+    }
+  }
+
+  function freeSlots(job) { return SLOTS - humans.filter(h => h.job === job).length; }
+
+  /* Grabbing */
+  function toSvg(e) {
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+    return [p.x, p.y];
+  }
+
+  function zoneAt(x, y) {
+    const [rx, ry] = L.zoneR;
+    for (const id in JOBS) {
+      const [zx, zy] = L.zones[id];
+      const dx = (x - zx) / rx, dy = (y - zy) / ry;
+      if (dx * dx + dy * dy <= 1.2) return id;
+    }
+    return null;
+  }
+
+  function onIsland(x, y) {
+    const [cx, cy, sx, sy] = L.island;
+    const dx = (x - cx) / (100 * sx), dy = (y - cy) / (38 * sy);
+    return dx * dx + dy * dy <= 0.92;
+  }
+
+  svg.addEventListener("pointerdown", e => {
+    if (e.button) return;
+    const [x, y] = toSvg(e);
+    let best = null, bestD = L === LAYOUTS.tall ? 88 : 70;
+    humans.forEach(h => {
+      const d = Math.hypot(h.x - x, h.y - 38 - y);
+      if (d < bestD) { bestD = d; best = h; }
+    });
+    if (!best) return;
+    e.preventDefault();
+    drag = { h: best, prevJob: best.job, prevSlot: best.slot, prevX: best.x, prevY: best.y, id: e.pointerId };
+    try { svg.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+    if (best.job) unassign(best);
+    best.x = x; best.y = y + 40; best.tx = best.x; best.ty = best.y;
+    svg.classList.add("dragging");
+    hideHint();
+    refresh();
+  });
+
+  svg.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const [x, y] = toSvg(e);
+    const h = drag.h;
+    h.x = x; h.y = y + 40; h.tx = h.x; h.ty = h.y;
+    const z = zoneAt(h.x, h.y);
+    for (const id in zoneEls) zoneEls[id].g.classList.toggle("hover", id === z);
+  });
+
+  function endDrag(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { h, prevJob, prevSlot, prevX, prevY } = drag;
+    drag = null;
+    svg.classList.remove("dragging");
+    for (const id in zoneEls) zoneEls[id].g.classList.remove("hover");
+    if (e.type === "pointercancel") {
+      if (prevJob) assign(h, prevJob, prevSlot); else { h.tx = prevX; h.ty = prevY; }
+      return;
+    }
+    const z = zoneAt(h.x, h.y);
+    if (z) {
+      if (!assign(h, z)) {
+        toast(`${JOBS[z].name} is full. Move someone out first.`);
+        if (prevJob) assign(h, prevJob, prevSlot); else { h.tx = prevX; h.ty = prevY; }
+      }
+    } else if (!onIsland(h.x, h.y)) {
+      toast("Villagers can't swim. Back to camp.");
+      const p = campSpot(); h.tx = p[0]; h.ty = p[1];
+    } else {
+      h.tx = h.x; h.ty = h.y;
+    }
+    h.lift = 40;
+  }
+  svg.addEventListener("pointerup", endDrag);
+  svg.addEventListener("pointercancel", endDrag);
+
+  /* Status */
+  function refresh() {
+    for (const id in JOBS) {
+      const box = $("res-" + id);
+      const n = humans.filter(h => h.job === id).length;
+      box.querySelector(".res-num").textContent = S.res[id];
+      let note = n ? `${n} working` : "Nobody working";
+      if (id === "berries") note += `, ${Math.floor(S.bush)} on bushes`;
+      box.querySelector(".res-note").textContent = note;
+      if (zoneEls[id]) {
+        zoneEls[id].count.textContent = `${n} of ${SLOTS}`;
+        zoneEls[id].g.classList.toggle("full", n >= SLOTS);
+      }
+    }
+    berryEls.forEach((b, i) => { b.style.display = i < Math.floor(S.bush) ? "" : "none"; });
+    woodEls.forEach((w, i) => { w.style.display = i < S.res.wood ? "" : "none"; });
+    brickEls.forEach((b, i) => { b.style.display = i < S.res.bricks ? "" : "none"; });
+    rackEls.forEach((r, i) => { r.style.display = i < S.res.fish ? "" : "none"; });
+    $("people").textContent = humans.length;
+    $("huts").textContent = S.huts;
+    $("hungry").hidden = !S.hungry;
+    const btn = $("build");
+    if (S.huts >= HUTS) {
+      btn.disabled = true;
+      $("build-cost").textContent = "All built";
+    } else {
+      const c = HUT_COST[S.huts];
+      $("build-cost").textContent = `${c} wood, ${c} bricks`;
+      btn.disabled = S.res.wood < c || S.res.bricks < c;
+    }
+  }
+
+  function bump(id) {
+    const n = $("res-" + id).querySelector(".res-num");
+    n.classList.remove("bump");
+    void n.getBoundingClientRect();
+    n.classList.add("bump");
+  }
+
+  function float(x, y, text) {
+    const t = el("text", { class: "float", x, y }, $("floats"));
+    t.textContent = text;
+    setTimeout(() => t.remove(), 1200);
+  }
+
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+  }
+  function hideHint() { $("hint").hidden = true; }
+
+  /* Rules */
+  function produce(h) {
+    const job = JOBS[h.job];
+    if (h.job === "berries") S.bush = Math.max(0, S.bush - 1);
+    S.res[job.res]++;
+    float(h.x, h.y - 96, job.label);
+    bump(job.res);
+    refresh();
+  }
+
+  function eat() {
+    let short = 0;
+    humans.forEach(() => {
+      if (S.res.berries > 0) S.res.berries--;
+      else if (S.res.fish > 0) S.res.fish--;
+      else short++;
+    });
+    const was = S.hungry;
+    S.hungry = short > 0;
+    if (S.hungry && !was) toast(`${short} of ${humans.length} went without food. Everyone works at half speed.`);
+    if (!S.hungry && was) toast("Everyone ate. Back to full speed.");
+    refresh();
+  }
+
+  function buildHut() {
+    if (S.huts >= HUTS) return;
+    const c = HUT_COST[S.huts];
+    if (S.res.wood < c || S.res.bricks < c) return;
+    S.res.wood -= c; S.res.bricks -= c;
+    const p = L.plots[S.huts];
+    S.huts++; S.justBuilt = true;
+    drawPlots();
+    addHuman(null, -1, p[0], p[1] + 14);
+    float(p[0], p[1] - 90, "A new villager!");
+    toast("A new villager moved in. One more mouth to feed.");
+    if (S.huts >= HUTS && !S.won) {
+      S.won = true;
+      const m = Math.floor(S.time / 60), s = String(Math.floor(S.time % 60)).padStart(2, "0");
+      $("win-text").textContent = `${humans.length} villagers in ${HUTS} huts, built in ${m}:${s}. Can you do it faster, without anyone going hungry?`;
+      $("win").hidden = false;
+    }
+    refresh();
+  }
+
+  /* Frame loop */
+  function update(dt, now) {
+    S.time += dt;
+    S.bush = Math.min(BUSH_MAX, S.bush + dt / BUSH_REGROW);
+    S.meal -= dt;
+    if (S.meal <= 0) { S.meal += MEAL_EVERY; eat(); }
+    $("meal-fill").style.transform = `scaleX(${Math.max(0, S.meal / MEAL_EVERY)})`;
+    $("meal-label").textContent = `Next meal: ${humans.length} food in ${Math.ceil(S.meal)}s`;
+
+    const speed = S.hungry ? 0.5 : 1;
+    let bushShown = Math.floor(S.bush);
+    if (bushShown !== S.bushShown) { S.bushShown = bushShown; refresh(); }
+
+    humans.forEach(h => {
+      const grabbed = drag && drag.h === h;
+      const dx = h.tx - h.x, dy = h.ty - h.y, d = Math.hypot(dx, dy);
+      h.moving = !grabbed && d > 2;
+      if (h.moving) {
+        const step = Math.min(d, WALK * dt);
+        h.x += dx / d * step; h.y += dy / d * step;
+        if (Math.abs(dx) > 2) h.face = dx > 0 ? 1 : -1;
+      }
+      h.lift = grabbed ? Math.min(40, h.lift + dt * 300) : Math.max(0, h.lift - dt * 220);
+      h.phase += dt;
+
+      const working = h.job && !h.moving && !grabbed;
+      let blocked = false;
+      if (working) {
+        const [zx] = L.zones[h.job];
+        h.face = h.job === "fish" ? L.faceSea : (h.job === "bricks" ? (h.x > zx - 28 ? -1 : 1) : (h.x > zx ? -1 : 1));
+        blocked = h.job === "berries" && Math.floor(S.bush) < 1;
+        if (!blocked) {
+          h.progress += dt * speed / JOBS[h.job].time;
+          if (h.progress >= 1) { h.progress -= 1; produce(h); }
+        } else if (now - (S.lastEmpty || 0) > 5000) {
+          S.lastEmpty = now;
+          toast("The bushes are picked clean. They regrow slowly.");
+        }
+      } else if (!h.job && !grabbed && !h.moving) {
+        h.idleFor -= dt;
+        if (h.idleFor <= 0) {
+          const p = campSpot();
+          if (onIsland(p[0], p[1])) { h.tx = p[0]; h.ty = p[1]; }
+          h.idleFor = 2 + Math.random() * 4;
+        }
+      }
+      draw(h, working && !blocked, grabbed);
+    });
+
+    const f = reduced ? 0 : now / 1000;
+    seaFish.setAttribute("transform", `translate(${Math.sin(f * 0.7) * 12} ${Math.sin(f * 2.1) * 9}) rotate(${Math.cos(f * 2.1) * 14})`);
+
+    if (now - lastSort > 300 && !drag) {
+      lastSort = now;
+      const order = humans.slice().sort((a, b) => a.y - b.y);
+      const kids = $("humans").children;
+      if (order.some((h, i) => kids[i] !== h.g)) {
+        const focused = document.activeElement;
+        order.forEach(h => $("humans").appendChild(h.g));
+        if (focused && focused.classList && focused.classList.contains("human")) focused.focus();
+      }
+    } else if (drag) {
+      $("humans").appendChild(drag.h.g);
+    }
+  }
+
+  const ARM = {
+    wood:    p => -105 + Math.sin(p * 7) * 65,
+    berries: p => -75 + Math.sin(p * 9) * 20,
+    fish:    p => -70 + Math.sin(p * 3) * 12,
+    bricks:  p => -35 + Math.sin(p * 6) * 25
+  };
+
+  function draw(h, working, grabbed) {
+    const still = reduced;
+    const air = h.lift;
+    let lean = 0, bob = 0;
+    if (grabbed) lean = still ? 0 : Math.sin(h.phase * 9) * 7;
+    else if (air > 0) lean = 0;
+    else if (h.moving) { bob = still ? 0 : Math.abs(Math.sin(h.phase * 11)) * -3.5; lean = still ? 0 : Math.sin(h.phase * 11) * 3; }
+    else if (working) {
+      if (h.job === "bricks" || h.job === "berries") bob = still ? 0 : Math.abs(Math.sin(h.phase * 5)) * 3;
+    }
+    h.g.setAttribute("transform", `translate(${h.x.toFixed(1)} ${h.y.toFixed(1)})`);
+    h.fig.setAttribute("transform", `translate(0 ${(bob - air).toFixed(1)}) rotate(${lean.toFixed(1)}) scale(${(1.9 * h.face).toFixed(2)} ${(grabbed ? 2.1 : 1.9)})`);
+    const a = working ? ARM[h.job](still ? 0 : h.phase) : (grabbed ? -150 + Math.sin(h.phase * 8) * 15 : (h.job ? -20 : 0));
+    h.arm.setAttribute("transform", `translate(5 -29) rotate(${a.toFixed(1)})`);
+    h.shadow.setAttribute("rx", (19 - air * 0.15).toFixed(1));
+    h.shadow.setAttribute("opacity", (1 - air * 0.012).toFixed(2));
+    const show = !!h.job && !grabbed && !h.moving;
+    h.barBg.style.display = h.barFg.style.display = show ? "" : "none";
+    if (show) h.barFg.setAttribute("width", (46 * Math.min(1, h.progress)).toFixed(1));
+  }
+
+  /* Start */
+  function newState() {
+    return { res: { wood: 3, berries: 4, fish: 2, bricks: 0 }, bush: BUSH_MAX, bushShown: BUSH_MAX, huts: 0, meal: MEAL_EVERY, time: 0, hungry: false, won: false };
+  }
+
+  function reset(data) {
+    S = data && data.res ? Object.assign(newState(), data) : newState();
+    S.justBuilt = false;
+    $("humans").textContent = "";
+    humans = [];
+    drag = null;
+    svg.classList.remove("dragging");
+    $("win").hidden = true;
+    $("toast").hidden = true;
+    $("floats").textContent = "";
+    $("hint").hidden = !!(data && data.res);
+    buildZones();
+    L = LAYOUTS.wide;
+    svg.removeAttribute("viewBox");
+    chooseLayout();
+    if (!svg.getAttribute("viewBox")) applyLayout("wide");
+    const roster = data && data.people ? data.people : [null, null, null, null];
+    roster.forEach(p => addHuman(p ? p.job : null, p ? p.slot : -1));
+    humans.forEach(h => {
+      if (h.job) { const s = slotPos(h.job, h.slot); h.x = h.tx = s[0]; h.y = h.ty = s[1]; }
+    });
+    refresh();
+  }
+
+  $("build").addEventListener("click", buildHut);
+  $("restart").addEventListener("click", () => reset());
+  $("again").addEventListener("click", () => reset());
+  $("keep").addEventListener("click", () => { $("win").hidden = true; });
+  new ResizeObserver(chooseLayout).observe(stage);
+
+  function start(data) {
+    reset(data);
+    let last = performance.now();
+    (function frame(now) {
+      const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+      last = now;
+      update(dt, now);
+      requestAnimationFrame(frame);
+    })(last);
+  }
+
+  window.claude?.hot?.snapshot?.(() => ({
+    res: S.res, bush: S.bush, huts: S.huts, meal: S.meal, time: S.time, hungry: S.hungry, won: S.won,
+    people: humans.map(h => ({ job: h.job, slot: h.slot }))
+  }));
+  window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
