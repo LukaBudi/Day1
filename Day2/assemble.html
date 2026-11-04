@@ -1,0 +1,1756 @@
+<title>Perfect Colony Workbench</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Mono:wght@400&display=swap">
+<style>
+  /* Layout: status header, a first-person workbench with a simulated right hand, and a side rail with the colony and tool book. */
+  :root {
+    color-scheme: dark;
+    --deep: #09333a;
+    --lagoon: #0e464d;
+    --shallows: #145a60;
+    --chalk: #f3efe3;
+    --haze: #b4cec9;
+    --rule: #3a7a7e;
+    --sand: #ecd6a4;
+    --sand-dark: #c9a86e;
+    --stick: #efcf95;
+    --stick-dark: #a97a44;
+    --mud: #b9773f;
+    --mud-dark: #80502a;
+    --wet-mud: #6f4524;
+    --bench: #3d2b1c;
+    --bench-line: #2e2015;
+    --leaf: #5fae6e;
+    --leaf-dark: #37804f;
+    --skin: #e8ad82;
+    --skin-dark: #c98a60;
+    --berry: #d9574f;
+    --warn: #e9734f;
+    --good: #7fd08a;
+    --cloth-a: #e9734f;
+    --cloth-b: #f2c14e;
+    --cloth-c: #4fa3c7;
+    --display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+    --body: "Atkinson Hyperlegible", Verdana, sans-serif;
+    --label: "DM Mono", Menlo, monospace;
+  }
+
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--lagoon);
+    color: var(--chalk);
+    font: 400 0.9375rem/1.35 var(--body);
+    overflow: hidden;
+  }
+  h2, h3, p { margin: 0; }
+
+  .app { height: 100%; display: flex; flex-direction: column; }
+
+  .status {
+    background: var(--deep);
+    padding-block: 8px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr);
+    gap: 8px 20px;
+    align-items: center;
+  }
+  .res { display: grid; gap: 0; min-width: 0; }
+  .res-top { display: flex; align-items: baseline; gap: 8px; }
+  .res-num { font: 700 1.375rem/1.1 var(--display); font-variant-numeric: tabular-nums; }
+  .res-name { font: 400 0.75rem/1.3 var(--label); letter-spacing: 0.06em; text-transform: uppercase; color: var(--stick); }
+  .res-note { color: var(--haze); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .colony-top { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; }
+  .colony-top b { font: 700 1.0625rem/1.2 var(--display); font-variant-numeric: tabular-nums; }
+  .colony-sub { color: var(--haze); font-size: 0.8125rem; }
+  .hungry { color: var(--deep); background: var(--warn); padding: 0 6px; font-weight: 700; font-size: 0.8125rem; }
+
+  .main { flex: 1; min-height: 0; display: flex; }
+  .bench { flex: 1; min-width: 0; position: relative; background: var(--bench); }
+  #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: none; }
+
+  .tip {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 32px);
+    background: var(--deep);
+    padding: 5px 12px;
+    pointer-events: none;
+    text-align: center;
+    font-size: 0.875rem;
+  }
+  .toast {
+    position: absolute;
+    left: 50%;
+    top: 12px;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 32px);
+    background: var(--chalk);
+    color: var(--deep);
+    padding: 6px 12px;
+    pointer-events: none;
+    text-align: center;
+  }
+
+  .rail {
+    width: 320px;
+    flex: none;
+    background: var(--deep);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+    overflow-y: auto;
+  }
+  .rail-label { font: 400 0.75rem/1.3 var(--label); letter-spacing: 0.06em; text-transform: uppercase; color: var(--stick); }
+  #colony-view { display: block; width: 100%; height: auto; background: var(--lagoon); }
+
+  button {
+    font: inherit;
+    color: var(--deep);
+    background: var(--stick);
+    border: 0;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--chalk); }
+  button:disabled { background: var(--shallows); color: var(--haze); cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--chalk); outline-offset: 2px; }
+  button.quiet { background: var(--shallows); color: var(--chalk); }
+  button.quiet:hover:not(:disabled) { background: var(--rule); }
+
+  #test { font: 700 1.0625rem/1.2 var(--display); padding: 10px 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .row > * { flex: 1 1 auto; }
+
+  .book { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .tool { background: var(--lagoon); padding: 6px 8px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+  .tool svg { width: 100%; height: 52px; display: block; }
+  .tool b { font: 700 0.875rem/1.2 var(--display); }
+  .tool small { color: var(--haze); font-size: 0.75rem; line-height: 1.25; }
+  .tool.found small.count { color: var(--good); }
+
+  /* Debug panel */
+  .debug {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: min(420px, 100%);
+    background: var(--deep);
+    border-left: 2px solid var(--rule);
+    padding: 12px max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px));
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    align-content: start;
+    z-index: 5;
+    font-size: 0.8125rem;
+  }
+  .debug h2 { font: 700 1.125rem/1.2 var(--display); }
+  .debug h3 { font: 400 0.75rem/1.3 var(--label); letter-spacing: 0.06em; text-transform: uppercase; color: var(--stick); margin-bottom: 4px; }
+  .debug-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .debug-note { color: var(--haze); }
+  .dial { display: grid; grid-template-columns: 120px minmax(0, 1fr) 52px; gap: 6px; align-items: center; }
+  .dial input { width: 100%; min-width: 0; margin: 0; accent-color: var(--stick); }
+  .dial output { font: 400 0.75rem/1 var(--label); text-align: right; font-variant-numeric: tabular-nums; }
+  .dials { display: grid; gap: 3px; }
+  .check { display: flex; align-items: center; gap: 8px; }
+  .check input { margin: 0; accent-color: var(--stick); flex: none; }
+  #recipe-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+  #recipe-list b { font-weight: 700; }
+  .debug button { padding: 4px 8px; font-size: 0.8125rem; }
+  .debug button.on { background: var(--chalk); }
+  #stats { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 10px; font-variant-numeric: tabular-nums; }
+  #stats span:nth-child(even) { font-family: var(--label); text-align: right; }
+  #log { font: 400 0.6875rem/1.4 var(--label); max-height: 170px; overflow-y: auto; background: var(--lagoon); padding: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .scroll-x { overflow-x: auto; }
+  table { border-collapse: collapse; font: inherit; color: inherit; width: 100%; }
+  th, td { text-align: left; padding: 2px 8px 2px 0; border-top: 1px solid var(--rule); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.note { white-space: normal; min-width: 120px; }
+
+  .rate {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: color-mix(in srgb, var(--deep) 65%, transparent);
+    z-index: 6;
+  }
+  .rate-card { background: var(--deep); padding: 20px; display: grid; gap: 12px; width: min(26rem, 100%); }
+  .rate-card h2 { font: 700 1.5rem/1.15 var(--display); }
+  .rate-card label { display: grid; gap: 4px; }
+  .rate-card input[type=range] { width: 100%; accent-color: var(--stick); }
+  .rate-ends { display: flex; justify-content: space-between; color: var(--haze); font-size: 0.8125rem; }
+  textarea { font: inherit; color: var(--chalk); background: var(--lagoon); border: 1px solid var(--rule); padding: 6px; resize: vertical; }
+
+  /* Keep the tool book in view, so the book switches show their effect straight away. */
+  @media (min-width: 901px) { .debug { right: 344px; } }
+
+  /* Scene materials */
+  .i-sand { fill: var(--sand); }
+  .i-sand-dark { fill: var(--sand-dark); }
+  .i-leaf { fill: var(--leaf); }
+  .i-leaf-dark { fill: var(--leaf-dark); }
+  .i-mud { fill: var(--mud); }
+  .i-mud-dark { fill: var(--mud-dark); }
+  .i-wet { fill: var(--wet-mud); }
+  .i-stick { fill: var(--stick); }
+  .i-dark { fill: var(--deep); }
+  .i-skin { fill: var(--skin); }
+  .i-chalk { fill: var(--chalk); }
+  .i-fish { fill: var(--cloth-c); }
+  .i-berry { fill: var(--berry); }
+  .s-stick { fill: none; stroke: var(--stick); stroke-linecap: round; }
+  .s-stick-dark { fill: none; stroke: var(--stick-dark); stroke-linecap: round; stroke-linejoin: round; }
+  .s-mud-dark { fill: none; stroke: var(--mud-dark); stroke-linecap: round; }
+  .s-skin { fill: none; stroke: var(--skin); stroke-linecap: round; }
+  .s-skin-dark { fill: none; stroke: var(--skin-dark); stroke-linecap: round; }
+  .plank { stroke: var(--bench-line); stroke-width: 3; }
+  .pile-pad { fill: var(--bench-line); }
+  .pile-name { fill: var(--chalk); font: 700 19px var(--display); text-anchor: middle; }
+  .pile-cost { fill: var(--stick); font: 400 14px var(--label); text-anchor: middle; }
+  .pile.off .pile-art { opacity: 0.35; }
+  .active-mark { fill: none; stroke: var(--chalk); stroke-width: 2; stroke-dasharray: 2 8; stroke-linecap: round; opacity: 0.7; }
+  .ring-bg { fill: none; stroke: var(--deep); stroke-width: 7; opacity: 0.7; }
+  .ring-fit { fill: none; stroke: var(--good); stroke-width: 7; stroke-linecap: butt; }
+  .ring-turn { fill: none; stroke: var(--warn); stroke-width: 3; stroke-dasharray: 4 6; }
+  .pinch-dot { fill: var(--chalk); stroke: var(--deep); stroke-width: 2; }
+  .dbg-joint { fill: var(--cloth-c); }
+  .dbg-used { fill: var(--warn); }
+  .dbg-snap { fill: none; stroke: var(--good); stroke-width: 1.5; }
+  .dbg-cursor { stroke: var(--chalk); stroke-width: 1.5; }
+  .dbg-text { fill: var(--chalk); font: 400 15px var(--label); }
+  .ghost { opacity: 0.6; filter: grayscale(1); }
+  .float {
+    font: 700 26px var(--display);
+    text-anchor: middle;
+    fill: var(--deep);
+    paint-order: stroke;
+    stroke: var(--chalk);
+    stroke-width: 5px;
+    pointer-events: none;
+    animation: rise 1.5s ease-out forwards;
+  }
+  @keyframes rise { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-60px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .float { animation-duration: 0.01s; } }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    html, body, .app { height: auto; }
+    .status { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .colony { grid-column: 1 / -1; }
+    .res-note { display: none; }
+    .res-top { display: grid; gap: 0; }
+    .main { flex-direction: column; }
+    .bench { flex: none; aspect-ratio: 1200 / 720; max-width: 100%; width: 100%; }
+    .rail { width: auto; padding-left: max(12px, env(safe-area-inset-left, 0px)); }
+    .tip { position: static; transform: none; width: auto; max-width: none; }
+    .keys { display: none; }
+  }
+</style>
+
+<div class="app">
+  <header class="status" aria-label="Colony status">
+    <div class="res" id="res-wood"><div class="res-top"><span class="res-num">0</span><span class="res-name">Wood</span></div><div class="res-note"></div></div>
+    <div class="res" id="res-berries"><div class="res-top"><span class="res-num">0</span><span class="res-name">Berries</span></div><div class="res-note"></div></div>
+    <div class="res" id="res-fish"><div class="res-top"><span class="res-num">0</span><span class="res-name">Fish</span></div><div class="res-note"></div></div>
+    <div class="res" id="res-bricks"><div class="res-top"><span class="res-num">0</span><span class="res-name">Bricks</span></div><div class="res-note"></div></div>
+    <div class="colony">
+      <div class="colony-top">
+        <span>Day <b id="day">1</b></span>
+        <span><b id="people">4</b> villagers</span>
+        <span class="hungry" id="hungry" hidden>Hungry: half speed</span>
+      </div>
+      <div class="colony-sub" id="time-note"></div>
+    </div>
+  </header>
+
+  <div class="main">
+    <main class="bench" id="bench">
+      <svg id="scene" viewBox="0 0 1200 720" role="application" aria-label="Workbench. The mouse is your right hand. Hold the button to pinch a part, scroll to turn your wrist, and hold still at a joint to set it.">
+        <defs>
+          <pattern id="bricks" width="20" height="20" patternUnits="userSpaceOnUse">
+            <rect width="20" height="20" class="i-mud"/>
+            <path d="M0 0H20M0 10H20M10 0V10M0 10V20M20 10V20" class="s-mud-dark" stroke-width="1.5"/>
+          </pattern>
+          <g id="p-stick">
+            <rect x="-70" y="-6" width="140" height="12" rx="6" class="i-stick"/>
+            <path class="s-stick-dark" stroke-width="1.6" d="M-52 -1H-30M-12 2H14M30 -2H50"/>
+          </g>
+          <g id="p-brick">
+            <rect x="-35" y="-17" width="70" height="34" rx="2" fill="url(#bricks)" stroke="var(--mud-dark)" stroke-width="2"/>
+          </g>
+          <g id="p-mud">
+            <path class="i-wet" d="M-18 2C-20 -12 -6 -20 6 -17C18 -15 22 -2 16 8C10 18 -4 20 -12 14C-16 11 -18 7 -18 2Z"/>
+            <path class="i-mud" d="M-9 -5C-5 -11 4 -12 8 -7C3 -9 -3 -9 -9 -5Z"/>
+          </g>
+          <path id="island-top" class="i-sand" d="M-100 2C-98 -22 -50 -38 0 -37C52 -38 100 -20 100 3C100 26 50 38 -2 38C-55 38 -100 26 -100 2Z"/>
+          <path id="island-under" class="i-sand-dark" d="M-100 7C-98 -17 -50 -33 0 -32C52 -33 100 -15 100 8C100 31 50 43 -2 43C-55 43 -100 31 -100 7Z"/>
+          <g id="palm">
+            <path class="s-stick-dark" stroke-width="6.5" d="M0 0C-3 -28 2 -55 13 -78"/>
+            <g class="i-leaf"><path d="M13 -78C25 -96 48 -96 58 -74C44 -84 28 -84 13 -78Z"/><path d="M13 -78C2 -98 -24 -100 -38 -80C-22 -88 -4 -86 13 -78Z"/></g>
+            <g class="i-leaf-dark"><path d="M13 -78C30 -78 44 -66 44 -46C36 -62 26 -72 13 -78Z"/><path d="M13 -78C-4 -80 -20 -68 -24 -48C-14 -62 -2 -72 13 -78Z"/></g>
+          </g>
+          <g id="bush">
+            <circle class="i-leaf-dark" cx="-16" cy="-14" r="15"/><circle class="i-leaf-dark" cx="16" cy="-14" r="15"/>
+            <circle class="i-leaf" cx="0" cy="-25" r="19"/><circle class="i-leaf" cx="-14" cy="-10" r="10"/><circle class="i-leaf" cx="13" cy="-11" r="11"/>
+            <circle class="i-berry" cx="-9" cy="-28" r="3"/><circle class="i-berry" cx="8" cy="-20" r="3"/><circle class="i-berry" cx="-4" cy="-12" r="3"/>
+          </g>
+          <g id="fish">
+            <path class="i-fish" d="M-22 0L-40 -13V13Z"/><path class="i-fish" d="M-28 0C-14 -19 18 -20 34 0C18 20 -14 19 -28 0Z"/>
+            <circle class="i-chalk" cx="20" cy="-4" r="3.2"/>
+          </g>
+          <g id="person">
+            <path class="s-skin" stroke-width="3.6" d="M-3 -16L-4 -1M3 -16L4 -1"/>
+            <path fill="currentColor" d="M-5 -31H5L7 -13H-7Z"/>
+            <circle class="i-skin" cx="0" cy="-37" r="5.6"/>
+            <path class="s-skin" stroke-width="3" d="M-5 -29L-8 -16M5 -29L8 -16"/>
+          </g>
+        </defs>
+        <rect width="1200" height="720" fill="var(--bench)"/>
+        <path class="plank" d="M0 120H1200M0 240H1200M0 360H1200M0 480H1200M0 600H1200"/>
+        <g id="piles"></g>
+        <g id="parts"></g>
+        <g id="binds"></g>
+        <g id="marks"></g>
+        <g id="floats"></g>
+        <g id="arm"></g>
+        <g id="overlay"></g>
+      </svg>
+      <div class="toast" id="toast" role="status" hidden></div>
+      <div class="tip" id="tip">Hold the button to pinch a part. Scroll or press Q / E to turn your wrist. Hold still at a joint to set it.</div>
+    </main>
+
+    <aside class="rail" aria-label="Colony and tools">
+      <div class="rail-label">Your colony, working without you</div>
+      <svg id="colony-view" viewBox="0 0 320 170" role="img" aria-label="Small view of the island with villagers working."></svg>
+      <button id="test" type="button" disabled>Test tool</button>
+      <div class="row">
+        <button id="turn-l" class="quiet" type="button" aria-label="Turn wrist left">Turn left</button>
+        <button id="turn-r" class="quiet" type="button" aria-label="Turn wrist right">Turn right</button>
+      </div>
+      <div class="rail-label" id="book-label">Tool book</div>
+      <div class="book" id="book"></div>
+      <div class="row">
+        <button id="end-run" class="quiet" type="button">End run and rate</button>
+        <button id="open-debug" class="quiet" type="button">Debug <span class="keys">(`)</span></button>
+      </div>
+    </aside>
+  </div>
+
+  <section class="debug" id="debug" aria-label="Debug tools" hidden>
+    <div class="debug-head"><h2>Debug</h2><button id="close-debug" class="quiet" type="button">Close</button></div>
+    <p class="debug-note">The mouse stands in for a right hand. This tests the assembly loop and its challenge. It can't test how real VR hands feel, so that still needs a Quest.</p>
+    <div>
+      <h3>Challenge preset</h3>
+      <div class="row" id="presets"></div>
+    </div>
+    <div>
+      <h3>Hand</h3>
+      <div class="dials" id="dials-hand"></div>
+    </div>
+    <div>
+      <h3>Puzzle</h3>
+      <div class="dials" id="dials-head"></div>
+    </div>
+    <div>
+      <h3>Tool book</h3>
+      <div class="dials" id="dials-book"></div>
+    </div>
+    <div>
+      <h3>Recipes this run</h3>
+      <ul id="recipe-list"></ul>
+      <button id="c-shuffle" type="button" style="margin-top:6px">Shuffle now</button>
+    </div>
+    <div>
+      <h3>Colony and time</h3>
+      <div class="dials" id="dials-colony"></div>
+    </div>
+    <div>
+      <h3>Cheats</h3>
+      <div class="row">
+        <button id="c-pause" type="button">Pause colony</button>
+        <button id="c-give" type="button">+20 all</button>
+        <button id="c-day" type="button">Skip a day</button>
+        <button id="c-unlock" type="button">Unlock tools</button>
+        <button id="c-lock" type="button">Lock tools</button>
+        <button id="c-clear" type="button">Clear bench</button>
+        <button id="c-overlay" type="button">Overlay</button>
+        <button id="c-restart" type="button">Restart run</button>
+      </div>
+      <div class="row" id="c-build" style="margin-top:6px"></div>
+    </div>
+    <div>
+      <h3>This run</h3>
+      <div id="stats"></div>
+    </div>
+    <div>
+      <h3>Event log</h3>
+      <div id="log"></div>
+    </div>
+    <div>
+      <h3>Rated runs</h3>
+      <div class="scroll-x"><table id="runs"></table></div>
+      <div class="row" style="margin-top:6px">
+        <button id="copy-runs" type="button">Copy runs as JSON</button>
+        <button id="clear-runs" type="button">Clear runs</button>
+      </div>
+      <textarea id="runs-json" rows="4" readonly hidden aria-label="Runs as JSON"></textarea>
+    </div>
+  </section>
+
+  <div class="rate" id="rate" hidden>
+    <form class="rate-card" id="rate-form">
+      <h2>How was that run?</h2>
+      <label for="r-fun">Fun
+        <input id="r-fun" type="range" min="1" max="5" value="3">
+        <span class="rate-ends"><span>Boring</span><span>Great</span></span>
+      </label>
+      <label for="r-mode">Where was the challenge?
+        <input id="r-mode" type="range" min="1" max="5" value="3">
+        <span class="rate-ends"><span>Hands</span><span>Head</span></span>
+      </label>
+      <label for="r-note">Note
+        <textarea id="r-note" rows="3"></textarea>
+      </label>
+      <div class="row">
+        <button type="submit">Save and start a new run</button>
+        <button id="rate-cancel" class="quiet" type="button">Keep playing</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const STORE = "colony-workbench-v1";
+  const DAY_COLONY = 120, MEAL_EVERY = 12, BUSH_MAX = 12, BUSH_REGROW = 5, MAX_COPIES = 3, BASE_CAP = 40;
+  const RAD = Math.PI / 180;
+  const SHOULDER = [1270, 820];
+
+  const JOBS = {
+    wood:    { name: "Chop wood",     time: 3 },
+    berries: { name: "Search bushes", time: 2.5 },
+    fish:    { name: "Hunt fish",     time: 4.5 },
+    bricks:  { name: "Make bricks",   time: 4 }
+  };
+
+  // Joint: [x, y, outward angle, class]. Class decides the kind of connection.
+  const JOINTS = {
+    stick: [[-70, 0, 180, "end"], [70, 0, 0, "end"], [-45, -6, -90, "mid"], [0, -6, -90, "mid"], [45, -6, -90, "mid"], [-45, 6, 90, "mid"], [0, 6, 90, "mid"], [45, 6, 90, "mid"]],
+    brick: [[0, -17, -90, "face"], [0, 17, 90, "face"], [-35, 0, 180, "face"], [35, 0, 0, "face"]],
+    mud: []
+  };
+
+  /* First-guess recipes. Change the game here. Each run picks one variant per recipe.
+     need: exact part counts. kinds: exact connection counts (at least, if min is set). bound: mud seals needed.
+     shape: parts for the drawing and for debug builds. conns: [partA, jointA, partB, jointB]. */
+  const RECIPES = [
+    { id: "mallet", name: "Mallet", job: "bricks", effect: "Faster bricks", vague: "Hit mud harder", variants: [
+      { need: { stick: 1, brick: 1 }, kinds: { "end-face": 1 }, bound: 0,
+        parts: "A stick and a brick", exact: "Stick end against a brick",
+        shape: [["stick", 0, 20, -90], ["brick", 0, -67, 0]], conns: [[0, 1, 1, 1]] },
+      { need: { stick: 1, brick: 1 }, kinds: { "end-face": 1 }, bound: 1,
+        parts: "A stick, a brick and mud", exact: "Stick end against a brick, sealed with mud",
+        shape: [["stick", 0, 20, -90], ["brick", 0, -67, 0]], conns: [[0, 1, 1, 1]] },
+      { need: { stick: 1, brick: 2 }, kinds: { "end-face": 1, "face-face": 1 }, bound: 0,
+        parts: "A stick and two bricks", exact: "Stick end against two joined bricks",
+        shape: [["stick", 0, 20, -90], ["brick", 0, -67, 0], ["brick", 0, -101, 0]], conns: [[0, 1, 1, 1], [1, 0, 2, 1]] }
+    ] },
+    { id: "axe", name: "Axe", job: "wood", effect: "Faster wood", vague: "Bite into a tree", variants: [
+      { need: { stick: 1, brick: 1 }, kinds: { "face-mid": 1 }, bound: 1,
+        parts: "A stick, a brick and mud", exact: "Brick on the side of a stick, sealed with mud",
+        shape: [["stick", 0, 0, 90], ["brick", 41, -45, 0]], conns: [[0, 2, 1, 2]] },
+      { need: { stick: 1, brick: 1 }, kinds: { "face-mid": 1 }, bound: 0,
+        parts: "A stick and a brick", exact: "Brick on the side of a stick",
+        shape: [["stick", 0, 0, 90], ["brick", 41, -45, 0]], conns: [[0, 2, 1, 2]] },
+      { need: { stick: 1, brick: 2 }, kinds: { "face-mid": 2 }, bound: 1,
+        parts: "A stick, two bricks and mud", exact: "A brick on each side of a stick, sealed with mud",
+        shape: [["stick", 0, 0, 90], ["brick", 41, -45, 0], ["brick", -41, -45, 0]], conns: [[0, 2, 1, 2], [0, 5, 2, 3]] }
+    ] },
+    { id: "spear", name: "Spear", job: "fish", effect: "Faster fish", vague: "Reach further into the water", variants: [
+      { need: { stick: 2 }, kinds: { "end-end": 1 }, bound: 1,
+        parts: "Two sticks and mud", exact: "Two sticks end to end, sealed with mud",
+        shape: [["stick", -70, 0, 0], ["stick", 70, 0, 0]], conns: [[0, 1, 1, 0]] },
+      { need: { stick: 3 }, kinds: { "end-end": 2 }, bound: 1,
+        parts: "Three sticks and mud", exact: "Three sticks end to end, sealed with mud",
+        shape: [["stick", -140, 0, 0], ["stick", 0, 0, 0], ["stick", 140, 0, 0]], conns: [[0, 1, 1, 0], [1, 1, 2, 0]] },
+      { need: { stick: 2, brick: 1 }, kinds: { "end-end": 1, "end-face": 1 }, bound: 1,
+        parts: "Two sticks, a brick and mud", exact: "Two sticks end to end with a brick on the tip, sealed with mud",
+        shape: [["stick", -70, 0, 0], ["stick", 70, 0, 0], ["brick", 175, 0, 0]], conns: [[0, 1, 1, 0], [1, 1, 2, 2]] }
+    ] },
+    { id: "rake", name: "Rake", job: "berries", effect: "Faster berries", vague: "Comb through leaves", variants: [
+      { need: { stick: 4 }, kinds: { "end-mid": 3 }, bound: 0,
+        parts: "Four sticks", exact: "Three sticks ending on the side of one stick",
+        shape: [["stick", 0, -35, 0], ["stick", -45, 41, 90], ["stick", 0, 41, 90], ["stick", 45, 41, 90]],
+        conns: [[0, 5, 1, 0], [0, 6, 2, 0], [0, 7, 3, 0]] },
+      { need: { stick: 3 }, kinds: { "end-mid": 2 }, bound: 0,
+        parts: "Three sticks", exact: "Two sticks ending on the side of one stick",
+        shape: [["stick", 0, -35, 0], ["stick", -45, 41, 90], ["stick", 45, 41, 90]],
+        conns: [[0, 5, 1, 0], [0, 7, 2, 0]] },
+      { need: { stick: 5 }, kinds: { "end-mid": 3, "end-end": 1 }, bound: 0,
+        parts: "Five sticks", exact: "Three sticks on one stick's side, plus a handle on its end",
+        shape: [["stick", 0, -35, 0], ["stick", -45, 41, 90], ["stick", 0, 41, 90], ["stick", 45, 41, 90], ["stick", -140, -35, 0]],
+        conns: [[0, 5, 1, 0], [0, 6, 2, 0], [0, 7, 3, 0], [4, 1, 0, 0]] }
+    ] },
+    { id: "hod", name: "Hod", job: "cap", effect: "Stores more bricks", vague: "Carry more at once", variants: [
+      { need: { stick: 2, brick: 2 }, kinds: { "face-face": 1, "face-mid": 2 }, bound: 0,
+        parts: "Two sticks and two bricks", exact: "Two joined bricks, each resting on a stick's side",
+        shape: [["brick", 0, -17, 0], ["brick", 0, 17, 0], ["stick", 0, -40, 0], ["stick", 0, 40, 0]],
+        conns: [[0, 1, 1, 0], [2, 6, 0, 0], [3, 3, 1, 1]] },
+      { need: { stick: 2, brick: 1 }, kinds: { "face-mid": 2 }, bound: 0,
+        parts: "Two sticks and a brick", exact: "One brick held between the sides of two sticks",
+        shape: [["brick", 0, 0, 0], ["stick", 0, -23, 0], ["stick", 0, 23, 0]],
+        conns: [[1, 6, 0, 0], [2, 3, 0, 1]] },
+      { need: { stick: 2, brick: 3 }, kinds: { "face-face": 2, "face-mid": 2 }, bound: 0,
+        parts: "Two sticks and three bricks", exact: "Three joined bricks held between two sticks",
+        shape: [["brick", 0, -34, 0], ["brick", 0, 0, 0], ["brick", 0, 34, 0], ["stick", 0, -57, 0], ["stick", 0, 57, 0]],
+        conns: [[0, 1, 1, 0], [1, 1, 2, 0], [3, 6, 0, 0], [4, 3, 2, 1]] }
+    ] },
+    { id: "house", name: "Brick house", job: "people", effect: "Adds a villager", vague: "Somewhere dry to sleep", variants: [
+      { need: { brick: 4 }, kinds: { "face-face": 3 }, bound: 1, min: true,
+        parts: "Four bricks and mud", exact: "Four bricks joined together, sealed with mud",
+        shape: [["brick", -35, 17, 0], ["brick", 35, 17, 0], ["brick", -35, -17, 0], ["brick", 35, -17, 0]],
+        conns: [[0, 3, 1, 2], [0, 0, 2, 1], [1, 0, 3, 1]] },
+      { need: { brick: 4 }, kinds: { "face-face": 3 }, bound: 2, min: true,
+        parts: "Four bricks and more mud", exact: "Four bricks joined together, with two joints sealed",
+        shape: [["brick", -35, 17, 0], ["brick", 35, 17, 0], ["brick", -35, -17, 0], ["brick", 35, -17, 0]],
+        conns: [[0, 3, 1, 2], [0, 0, 2, 1], [1, 0, 3, 1]] },
+      { need: { brick: 5 }, kinds: { "face-face": 4 }, bound: 1, min: true,
+        parts: "Five bricks and mud", exact: "Five bricks joined together, sealed with mud",
+        shape: [["brick", -70, 17, 0], ["brick", 0, 17, 0], ["brick", 70, 17, 0], ["brick", -70, -17, 0], ["brick", 0, -17, 0]],
+        conns: [[0, 3, 1, 2], [1, 3, 2, 2], [0, 0, 3, 1], [1, 0, 4, 1]] }
+    ] }
+  ];
+
+  // The fields below come from the variant picked for this run.
+  function useVariants(map) {
+    RECIPES.forEach(r => {
+      for (const k of ["need", "kinds", "bound", "min", "parts", "exact", "shape", "conns"]) delete r[k];
+      Object.assign(r, r.variants[(map[r.id] || 0) % r.variants.length]);
+    });
+  }
+  // Each new run changes every recipe, so last run's answer never carries over.
+  function nextVariants(last) {
+    const map = {};
+    RECIPES.forEach(r => {
+      if (!D.shuffle) { map[r.id] = 0; return; }
+      const options = r.variants.map((_, i) => i).filter(i => !last || i !== last[r.id]);
+      map[r.id] = options[Math.floor(Math.random() * options.length)];
+    });
+    return map;
+  }
+
+  /* Materials per recipe. Level 2 (Medium) is the hand-written table above; the others are listed here
+     and their layouts are generated. Entry: [sticks, bricks, mud seals, connections]. */
+  const LEVEL_NAMES = ["Low", "Medium", "High", "Max"];
+  const MORE = {
+    mallet: {
+      1: [[1, 1, 0, { "end-face": 1 }], [1, 1, 1, { "end-face": 1 }]],
+      3: [[2, 2, 0, { "end-end": 1, "end-face": 1, "face-face": 1 }], [3, 1, 0, { "end-end": 2, "end-face": 1 }], [2, 2, 1, { "end-face": 2, "face-face": 1 }]],
+      4: [[4, 2, 0, { "end-end": 3, "end-face": 1, "face-face": 1 }], [3, 3, 0, { "end-end": 2, "end-face": 1, "face-face": 2 }], [4, 2, 1, { "end-end": 2, "end-face": 2, "face-face": 1 }]]
+    },
+    axe: {
+      1: [[1, 1, 1, { "face-mid": 1 }], [1, 1, 0, { "face-mid": 1 }]],
+      3: [[2, 2, 1, { "face-mid": 2, "end-end": 1 }], [1, 3, 1, { "face-mid": 2, "face-face": 1 }], [2, 2, 1, { "face-mid": 1, "end-mid": 1, "face-face": 1 }]],
+      4: [[4, 2, 1, { "face-mid": 2, "end-end": 3 }], [3, 3, 1, { "face-mid": 2, "face-face": 2, "end-end": 1 }], [4, 2, 1, { "face-mid": 2, "end-end": 2, "end-mid": 1 }]]
+    },
+    spear: {
+      1: [[2, 0, 1, { "end-end": 1 }], [2, 0, 0, { "end-end": 1 }]],
+      3: [[4, 0, 1, { "end-end": 3 }], [3, 1, 1, { "end-end": 2, "face-mid": 1 }], [4, 1, 1, { "end-end": 3, "end-face": 1 }]],
+      4: [[5, 1, 1, { "end-end": 4, "end-face": 1 }], [4, 2, 1, { "end-end": 3, "end-face": 2 }], [6, 0, 1, { "end-end": 5 }]]
+    },
+    rake: {
+      1: [[2, 0, 0, { "end-mid": 1 }], [2, 0, 1, { "end-mid": 1 }]],
+      3: [[4, 0, 0, { "end-mid": 3 }], [5, 0, 0, { "end-mid": 4 }], [4, 0, 0, { "end-mid": 2, "end-end": 1 }]],
+      4: [[6, 0, 0, { "end-mid": 5 }], [5, 1, 0, { "end-mid": 4, "end-face": 1 }], [6, 0, 0, { "end-mid": 4, "end-end": 1 }]]
+    },
+    hod: {
+      1: [[2, 0, 0, { "mid-mid": 1 }], [2, 0, 1, { "mid-mid": 1 }]],
+      3: [[2, 2, 0, { "face-mid": 2, "face-face": 1 }], [3, 2, 0, { "face-mid": 3, "face-face": 1 }], [2, 3, 0, { "face-mid": 2, "face-face": 2 }]],
+      4: [[4, 2, 0, { "face-mid": 4, "face-face": 1 }], [3, 3, 0, { "face-mid": 3, "face-face": 2 }], [4, 2, 0, { "face-mid": 3, "end-mid": 1, "face-face": 1 }]]
+    },
+    house: {
+      1: [[0, 2, 1, { "face-face": 1 }], [0, 2, 0, { "face-face": 1 }]],
+      3: [[0, 4, 1, { "face-face": 3 }], [0, 5, 1, { "face-face": 4 }], [0, 4, 2, { "face-face": 3 }]],
+      4: [[0, 6, 1, { "face-face": 5 }], [0, 6, 2, { "face-face": 5 }], [2, 4, 1, { "face-face": 3, "face-mid": 2 }]]
+    }
+  };
+  const KIND_TEXT = {
+    "end-end": "stick end to stick end", "end-face": "stick end on a brick", "end-mid": "stick end on a stick's side",
+    "face-face": "brick to brick", "face-mid": "brick on a stick's side", "mid-mid": "stick side to stick side"
+  };
+  const COUNT_WORD = ["", "one", "two", "three", "four", "five", "six"];
+
+  function plural(n, word) { return `${COUNT_WORD[n]} ${word}${n > 1 ? "s" : ""}`; }
+
+  // Finds a layout with exactly these connections, preferring one where parts don't overlap.
+  function layoutFor(sticks, bricks, kinds) {
+    const half = t => (t === "stick" ? [70, 6] : [35, 17]);
+    const samples = t => {
+      const out = [];
+      if (t === "stick") for (let x = -60; x <= 60; x += 15) out.push([x, 0]);
+      else for (let x = -27; x <= 27; x += 9) for (let y = -9; y <= 9; y += 9) out.push([x, y]);
+      return out;
+    };
+    const clashes = (a, list) => list.some(b => {
+      const [hw, hh] = half(b.type);
+      return samples(a.type).some(([sx, sy]) => {
+        const ca = Math.cos(a.a * RAD), sa = Math.sin(a.a * RAD);
+        const wx = a.x + sx * ca - sy * sa - b.x, wy = a.y + sx * sa + sy * ca - b.y;
+        const cb = Math.cos(-b.a * RAD), sb = Math.sin(-b.a * RAD);
+        return Math.abs(wx * cb - wy * sb) < hw && Math.abs(wx * sb + wy * cb) < hh;
+      });
+    });
+    const search = (checkOverlap) => {
+      let budget = 60000;
+      const placed = [], links = [], left = { stick: sticks, brick: bricks }, todo = { ...kinds }, used = new Set();
+      const walk = () => {
+        if (--budget < 0) return false;
+        if (!left.stick && !left.brick) return Object.values(todo).every(v => v === 0);
+        for (let i = 0; i < placed.length; i++) {
+          const p = placed[i], js = JOINTS[p.type];
+          for (let ji = 0; ji < js.length; ji++) {
+            if (used.has(i + ":" + ji)) continue;
+            for (const t of ["stick", "brick"]) {
+              if (!left[t]) continue;
+              const jt = JOINTS[t];
+              for (let jk = 0; jk < jt.length; jk++) {
+                const kind = kindOf(js[ji][3], jt[jk][3]);
+                if (!todo[kind]) continue;
+                const a = p.a + js[ji][2] + 180 - jt[jk][2];
+                const c = Math.cos(p.a * RAD), s = Math.sin(p.a * RAD);
+                const wx = p.x + js[ji][0] * c - js[ji][1] * s, wy = p.y + js[ji][0] * s + js[ji][1] * c;
+                const ca = Math.cos(a * RAD), sa = Math.sin(a * RAD);
+                const q = { type: t, a, x: wx - (jt[jk][0] * ca - jt[jk][1] * sa), y: wy - (jt[jk][0] * sa + jt[jk][1] * ca) };
+                if (checkOverlap && (clashes(q, placed) || placed.some(o => clashes(o, [q])))) continue;
+                placed.push(q); links.push([i, ji, placed.length - 1, jk]);
+                left[t]--; todo[kind]--;
+                used.add(i + ":" + ji); used.add((placed.length - 1) + ":" + jk);
+                if (walk()) return true;
+                used.delete(i + ":" + ji); used.delete((placed.length - 1) + ":" + jk);
+                placed.pop(); links.pop(); left[t]++; todo[kind]++;
+              }
+            }
+          }
+        }
+        return false;
+      };
+      for (const t of ["stick", "brick"]) {
+        if (!left[t]) continue;
+        placed.push({ type: t, x: 0, y: 0, a: 0 }); left[t]--;
+        if (walk()) return { placed, links };
+        placed.pop(); left[t]++;
+      }
+      return null;
+    };
+    return search(true) || search(false);
+  }
+
+  function makeVariant([sticks, bricks, bound, kinds]) {
+    const found = layoutFor(sticks, bricks, kinds);
+    const words = [];
+    if (sticks) words.push(plural(sticks, "stick"));
+    if (bricks) words.push(plural(bricks, "brick"));
+    const list = words.join(" and ");
+    const joins = Object.keys(kinds).map(k => `${kinds[k]} x ${KIND_TEXT[k]}`).join(", ");
+    const need = {};
+    if (sticks) need.stick = sticks;
+    if (bricks) need.brick = bricks;
+    return {
+      need, kinds, bound,
+      parts: (list[0].toUpperCase() + list.slice(1)) + (bound ? " and mud" : ""),
+      exact: joins + (bound ? `, ${COUNT_WORD[bound]} sealed with mud` : ""),
+      shape: found.placed.map(p => [p.type, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2)]),
+      conns: found.links
+    };
+  }
+
+  function setLevel(level) {
+    RECIPES.forEach(r => {
+      if (!r.levels) r.levels = { 2: r.variants };
+      if (!r.levels[level]) r.levels[level] = MORE[r.id][level].map(makeVariant);
+      r.variants = r.levels[level];
+    });
+  }
+
+  const DIALS = {
+    lag:         { group: "hand", label: "Hand lag (s)",   min: 0, max: 0.4, step: 0.01, value: 0.06 },
+    tremor:      { group: "hand", label: "Tremor",         min: 0, max: 14, step: 0.5, value: 2 },
+    grabRadius:  { group: "hand", label: "Grab radius",    min: 8, max: 60, step: 1, value: 30 },
+    wristStep:   { group: "hand", label: "Wrist step (deg)", min: 1, max: 45, step: 1, value: 8 },
+    snapTol:     { group: "hand", label: "Snap tolerance", min: 6, max: 60, step: 1, value: 24 },
+    angleTol:    { group: "hand", label: "Angle tolerance", min: 3, max: 60, step: 1, value: 25 },
+    holdTime:    { group: "hand", label: "Hold still (s)", min: 0.05, max: 2.5, step: 0.05, value: 0.45 },
+    fastSpeed:   { group: "hand", label: "Too fast (u/s)", min: 50, max: 900, step: 10, value: 350 },
+    breakChance: { group: "hand", label: "Break chance /s", min: 0, max: 2, step: 0.05, value: 0.15 },
+    hints:       { group: "head", label: "Hints 0 exact, 1 parts, 2 vague", min: 0, max: 2, step: 1, value: 1 },
+    junkRefund:  { group: "head", label: "Junk refund",    min: 0, max: 1, step: 0.05, value: 0.5 },
+    materials:   { group: "head", label: "Materials per recipe", min: 1, max: 4, step: 1, value: 2, names: ["Low", "Medium", "High", "Max"] },
+    shuffle:     { group: "head", label: "Shuffle recipes each run", toggle: true, value: 1 },
+    showIcons:   { group: "book", label: "Show tool icons (icons reveal the build)", toggle: true, value: 1 },
+    showRecipe:  { group: "book", label: "Show recipe once a tool is crafted", toggle: true, value: 1 },
+    timeScale:   { group: "colony", label: "Time scale",   min: 0.5, max: 20, step: 0.5, value: 2 },
+    stickCost:   { group: "colony", label: "Stick cost",   min: 0, max: 8, step: 1, value: 2 },
+    brickCost:   { group: "colony", label: "Brick cost",   min: 0, max: 8, step: 1, value: 3 },
+    toolBoost:   { group: "colony", label: "Tool boost",   min: 0, max: 2, step: 0.05, value: 0.5 },
+    rate:        { group: "colony", label: "All job rates", min: 0.1, max: 4, step: 0.1, value: 1 },
+    wood:        { group: "colony", label: "Workers: wood", min: 0, max: 8, step: 1, value: 1 },
+    berries:     { group: "colony", label: "Workers: berries", min: 0, max: 8, step: 1, value: 1 },
+    fish:        { group: "colony", label: "Workers: fish", min: 0, max: 8, step: 1, value: 1 },
+    bricks:      { group: "colony", label: "Workers: bricks", min: 0, max: 8, step: 1, value: 1 }
+  };
+
+  // Presets touch only the challenge dials, so runs stay comparable.
+  const PRESETS = {
+    "Hands-heavy": { lag: 0.14, tremor: 5, snapTol: 14, angleTol: 12, holdTime: 0.9, breakChance: 0.5, grabRadius: 18, hints: 0 },
+    "Balanced":    { lag: 0.06, tremor: 2, snapTol: 24, angleTol: 25, holdTime: 0.45, breakChance: 0.15, grabRadius: 30, hints: 1 },
+    "Head-heavy":  { lag: 0.02, tremor: 0, snapTol: 36, angleTol: 45, holdTime: 0.15, breakChance: 0, grabRadius: 40, hints: 2 }
+  };
+
+  const PILES = {
+    stick: { x: 95, y: 110, name: "Sticks", res: "wood" },
+    brick: { x: 95, y: 300, name: "Bricks", res: "bricks" },
+    mud:   { x: 95, y: 490, name: "Mud pit", res: null }
+  };
+
+  const $ = id => document.getElementById(id);
+  const svg = $("scene");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function el(tag, attrs, parent) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+
+  /* Settings and rated runs live in this browser only. */
+  const D = {};
+  for (const k in DIALS) D[k] = DIALS[k].value;
+  let saved = { dials: {}, preset: "Balanced", runs: [], lastVariants: null };
+  try {
+    const raw = localStorage.getItem(STORE);
+    if (raw) saved = Object.assign(saved, JSON.parse(raw));
+  } catch (err) { /* storage blocked: run without memory */ }
+  for (const k in saved.dials) if (k in D) D[k] = saved.dials[k];
+  let presetName = saved.preset;
+  setLevel(D.materials);
+  useVariants({});
+  function persist() {
+    try { localStorage.setItem(STORE, JSON.stringify({ dials: D, preset: presetName, runs: saved.runs, lastVariants: saved.lastVariants })); } catch (err) { /* storage blocked */ }
+  }
+
+  /* State */
+  let S, parts = [], conns = [], nextId = 1;
+  let held = null, active = null, cand = null, nearMiss = null, attempt = false;
+  let showOverlay = false, paused = false, toastTimer;
+  const hand = { tx: 760, ty: 420, x: 760, y: 420, sx: 760, sy: 420, down: false, vx: 0, speed: 0, wrist: 0, wristGoal: 0, t: 0, moved: 0 };
+  let pid = null, partEls = new Map();
+
+  function newState() {
+    return {
+      res: { wood: 10, berries: 4, fish: 2, bricks: 9 },
+      bush: BUSH_MAX, job: { wood: 0, berries: 0, fish: 0, bricks: 0 }, meal: MEAL_EVERY, colonyTime: 0, real: 0,
+      people: 4, hungry: false, tools: {}, found: {}, capBonus: 0, variants: {},
+      stats: { grabs: 0, setOk: 0, setLost: 0, wrongAngle: 0, breaks: 0, tests: 0, junk: 0, junkIdeas: [], nearMiss: 0, firstFind: null, idle: 0, hungryMeals: 0, meals: 0, partsTaken: 0 },
+      log: []
+    };
+  }
+
+  function log(type, detail) {
+    const t = S.real.toFixed(1).padStart(6);
+    S.log.push({ t: +S.real.toFixed(2), type, detail: detail || "" });
+    if (S.log.length > 400) S.log.shift();
+    if (!$("debug").hidden) {
+      const box = $("log");
+      box.textContent += `${t} ${type} ${detail || ""}\n`;
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  /* Parts and groups */
+  function addPart(type, x, y, a) {
+    const p = { id: nextId++, type, x, y, a: a || 0 };
+    parts.push(p);
+    const g = el("g", {}, $("parts"));
+    el("use", { href: "#p-" + type }, g);
+    partEls.set(p.id, g);
+    drawPart(p);
+    return p;
+  }
+  function removePart(p) {
+    parts = parts.filter(o => o !== p);
+    conns = conns.filter(c => c.a !== p.id && c.b !== p.id);
+    const g = partEls.get(p.id);
+    if (g) g.remove();
+    partEls.delete(p.id);
+  }
+  const byId = id => parts.find(p => p.id === id);
+  function drawPart(p) {
+    partEls.get(p.id).setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${(p.a / RAD).toFixed(1)})`);
+  }
+  function jointWorld(p, i) {
+    const j = JOINTS[p.type][i], c = Math.cos(p.a), s = Math.sin(p.a);
+    return { x: p.x + j[0] * c - j[1] * s, y: p.y + j[0] * s + j[1] * c, n: p.a + j[2] * RAD, cls: j[3] };
+  }
+  function groupOf(p) {
+    const seen = new Set([p]), stack = [p];
+    while (stack.length) {
+      const cur = stack.pop();
+      conns.forEach(c => {
+        const other = c.a === cur.id ? byId(c.b) : c.b === cur.id ? byId(c.a) : null;
+        if (other && !seen.has(other)) { seen.add(other); stack.push(other); }
+      });
+    }
+    return [...seen];
+  }
+  function jointUsed(p, i) { return conns.some(c => (c.a === p.id && c.ja === i) || (c.b === p.id && c.jb === i)); }
+  const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  const kindOf = (a, b) => [a, b].sort().join("-");
+
+  /* Grip */
+  function setGrip(list) {
+    const w = hand.wrist, c = Math.cos(-w), s = Math.sin(-w);
+    held = {
+      list: list.map(p => {
+        const dx = p.x - hand.x, dy = p.y - hand.y;
+        return { p, rx: dx * c - dy * s, ry: dx * s + dy * c, ra: p.a - w };
+      })
+    };
+  }
+
+  function distToPart(p, x, y) {
+    const c = Math.cos(-p.a), s = Math.sin(-p.a), dx = x - p.x, dy = y - p.y;
+    const lx = dx * c - dy * s, ly = dx * s + dy * c;
+    const hw = p.type === "stick" ? 70 : p.type === "brick" ? 35 : 16;
+    const hh = p.type === "stick" ? 6 : p.type === "brick" ? 17 : 16;
+    return Math.hypot(Math.max(0, Math.abs(lx) - hw), Math.max(0, Math.abs(ly) - hh));
+  }
+
+  function pinch() {
+    hand.down = true;
+    let best = null, bestD = D.grabRadius;
+    parts.forEach(p => {
+      const d = distToPart(p, hand.x, hand.y);
+      if (d < bestD) { bestD = d; best = p; }
+    });
+    if (best) {
+      const group = groupOf(best);
+      setGrip(group);
+      active = group[0];
+      S.stats.grabs++;
+      log("grab", `${best.type}, group of ${group.length}`);
+    } else {
+      for (const type in PILES) {
+        const pile = PILES[type];
+        if (Math.hypot(hand.x - pile.x, hand.y - pile.y) < 75) { takeFromPile(type); break; }
+      }
+    }
+    $("tip").hidden = true;
+    refresh();
+  }
+
+  function pileCost(type) { return type === "stick" ? D.stickCost : type === "brick" ? D.brickCost : 0; }
+
+  function takeFromPile(type) {
+    const pile = PILES[type], cost = pileCost(type);
+    if (pile.res && S.res[pile.res] < cost) {
+      toast(`Not enough ${pile.res}. Your colony is still gathering it.`);
+      log("no-stock", type);
+      return;
+    }
+    if (pile.res) S.res[pile.res] -= cost;
+    const p = addPart(type, hand.x, hand.y, 0);
+    setGrip([p]);
+    if (type !== "mud") active = p;
+    S.stats.partsTaken++;
+    log("take", type);
+  }
+
+  function release() {
+    hand.down = false;
+    if (attempt) { S.stats.setLost++; log("joint-lost", "released before it set"); attempt = false; }
+    if (held) {
+      const only = held.list.length === 1 ? held.list[0].p : null;
+      if (only) {
+        const pile = PILES[only.type];
+        if (Math.hypot(only.x - pile.x, only.y - pile.y) < 80) {
+          if (pile.res) S.res[pile.res] += pileCost(only.type);
+          if (active === only) active = null;
+          removePart(only);
+          log("return", only.type);
+        }
+      }
+      held = null;
+    }
+    cand = null; nearMiss = null; S.setProgress = 0;
+    refresh();
+  }
+
+  /* Finding what the held part could join */
+  function findCandidate() {
+    cand = null; nearMiss = null;
+    if (!held) return;
+    const mine = new Set(held.list.map(h => h.p));
+    if (held.list.length === 1 && mine.has(held.list[0].p) && held.list[0].p.type === "mud") {
+      const mud = held.list[0].p;
+      let bestD = D.snapTol * 1.6;
+      conns.forEach(c => {
+        if (c.bound) return;
+        const j = jointWorld(byId(c.a), c.ja), d = Math.hypot(j.x - mud.x, j.y - mud.y);
+        if (d < bestD) { bestD = d; cand = { mud: true, conn: c, x: j.x, y: j.y }; }
+      });
+      return;
+    }
+    let bestD = D.snapTol, missD = D.snapTol;
+    held.list.forEach(({ p }) => {
+      JOINTS[p.type].forEach((_, i) => {
+        if (jointUsed(p, i)) return;
+        const ja = jointWorld(p, i);
+        parts.forEach(o => {
+          if (mine.has(o) || o.type === "mud") return;
+          JOINTS[o.type].forEach((__, k) => {
+            if (jointUsed(o, k)) return;
+            const jb = jointWorld(o, k), d = Math.hypot(ja.x - jb.x, ja.y - jb.y);
+            if (d >= D.snapTol) return;
+            if (angDiff(ja.n, jb.n + Math.PI) <= D.angleTol * RAD) {
+              if (d < bestD) { bestD = d; cand = { p, i, o, k, x: jb.x, y: jb.y }; }
+            } else if (d < missD) { missD = d; nearMiss = { x: jb.x, y: jb.y }; }
+          });
+        });
+      });
+    });
+    if (cand) nearMiss = null;
+  }
+
+  function setJoint() {
+    if (cand.mud) {
+      const mud = held.list[0].p;
+      cand.conn.bound = true;
+      removePart(mud);
+      held = null;
+      float(cand.x, cand.y - 26, "Sealed");
+      log("seal", "joint sealed with mud");
+    } else {
+      const { p, i, o, k } = cand;
+      const ja = jointWorld(p, i), jb = jointWorld(o, k);
+      const turn = (jb.n + Math.PI) - ja.n;
+      const c = Math.cos(turn), s = Math.sin(turn);
+      held.list.forEach(({ p: q }) => {
+        const dx = q.x - ja.x, dy = q.y - ja.y;
+        q.x = jb.x + dx * c - dy * s;
+        q.y = jb.y + dx * s + dy * c;
+        q.a += turn;
+        drawPart(q);
+      });
+      conns.push({ a: p.id, ja: i, b: o.id, jb: k, bound: false });
+      const kind = kindOf(ja.cls, jb.cls);
+      hand.wrist = 0; hand.wristGoal = 0;
+      const group = groupOf(p);
+      setGrip(group);
+      active = group[0];
+      float(jb.x, jb.y - 26, "Joined");
+      log("joint", `${kind}, group of ${group.length}`);
+    }
+    S.stats.setOk++;
+    attempt = false;
+    S.setProgress = 0;
+    cand = null;
+    refresh();
+  }
+
+  function breakCheck(dt) {
+    if (!held || D.breakChance <= 0 || hand.speed <= D.fastSpeed) return;
+    const mine = new Set(held.list.map(h => h.p.id));
+    const loose = conns.filter(c => !c.bound && mine.has(c.a) && mine.has(c.b));
+    if (!loose.length || Math.random() > D.breakChance * dt) return;
+    const c = loose[Math.floor(Math.random() * loose.length)];
+    conns = conns.filter(o => o !== c);
+    const a = byId(c.a), b = byId(c.b), j = jointWorld(a, c.ja);
+    const kept = groupOf(held.list[0].p);
+    setGrip(kept);
+    active = kept[0];
+    S.stats.breaks++;
+    float(j.x, j.y - 26, "Snap! Too fast");
+    log("break", `${a.type}-${b.type}, moved too fast`);
+    refresh();
+  }
+
+  /* Testing a build */
+  function signature(group) {
+    const ids = new Set(group.map(p => p.id));
+    const need = {}, kinds = {};
+    let bound = 0;
+    group.forEach(p => { need[p.type] = (need[p.type] || 0) + 1; });
+    conns.forEach(c => {
+      if (!ids.has(c.a) || !ids.has(c.b)) return;
+      const k = kindOf(JOINTS[byId(c.a).type][c.ja][3], JOINTS[byId(c.b).type][c.jb][3]);
+      kinds[k] = (kinds[k] || 0) + 1;
+      if (c.bound) bound++;
+    });
+    return { need, kinds, bound };
+  }
+
+  function sameCounts(have, want, atLeast) {
+    const keys = new Set([...Object.keys(have), ...Object.keys(want)]);
+    for (const k of keys) {
+      const h = have[k] || 0, w = want[k] || 0;
+      if (atLeast ? h < w : h !== w) return false;
+    }
+    return true;
+  }
+
+  function matchRecipe(sig) {
+    let near = null;
+    for (const r of RECIPES) {
+      if (!sameCounts(sig.need, r.need, r.min)) continue;
+      if (!sameCounts(sig.kinds, r.kinds, r.min)) continue;
+      if (r.min && Object.keys(sig.need).some(t => !(t in r.need))) continue;
+      if (sig.bound >= r.bound) return { recipe: r };
+      near = r;
+    }
+    return { near };
+  }
+
+  function activeGroup() {
+    if (!active || !parts.includes(active)) return null;
+    return groupOf(active);
+  }
+
+  function testTool() {
+    const group = activeGroup();
+    if (!group || group.length < 2 || held) return;
+    const sig = signature(group), { recipe, near } = matchRecipe(sig);
+    S.stats.tests++;
+    const c = group.reduce((acc, p) => [acc[0] + p.x, acc[1] + p.y], [0, 0]);
+    const cx = c[0] / group.length, cy = c[1] / group.length;
+    if (near) {
+      S.stats.nearMiss++;
+      toast("It falls apart when you test it. Something should hold it together.");
+      log("near-miss", near.name);
+      return;
+    }
+    if (recipe) {
+      const first = !(recipe.id in S.found);
+      if (first) {
+        S.found[recipe.id] = +S.real.toFixed(1);
+        if (S.stats.firstFind === null) S.stats.firstFind = +S.real.toFixed(1);
+      }
+      const had = S.tools[recipe.id] || 0;
+      if (had < MAX_COPIES) applyTool(recipe);
+      float(cx, cy - 20, first ? `New tool: ${recipe.name}!` : `${recipe.name} +1`);
+      toast(had < MAX_COPIES ? `${recipe.name}: ${recipe.effect.toLowerCase()}.` : `You already have ${MAX_COPIES} of these. This one adds nothing.`);
+      log(first ? "discover" : "rebuild", recipe.name);
+    } else {
+      const idea = JSON.stringify(sig);
+      S.stats.junk++;
+      if (!S.stats.junkIdeas.includes(idea)) S.stats.junkIdeas.push(idea);
+      const refund = { wood: 0, bricks: 0 };
+      group.forEach(p => {
+        if (p.type === "stick") refund.wood += D.stickCost * D.junkRefund;
+        if (p.type === "brick") refund.bricks += D.brickCost * D.junkRefund;
+      });
+      S.res.wood += Math.floor(refund.wood);
+      S.res.bricks += Math.floor(refund.bricks);
+      float(cx, cy - 20, "Just junk");
+      toast("That doesn't do anything yet. You got some materials back.");
+      log("junk", idea);
+    }
+    group.forEach(removePart);
+    active = null;
+    buildBook();
+    refresh();
+  }
+
+  function applyTool(r) {
+    S.tools[r.id] = (S.tools[r.id] || 0) + 1;
+    if (r.job === "cap") S.capBonus += 20;
+    if (r.job === "people") S.people++;
+  }
+
+  function jobSpeed(job) {
+    let n = 0;
+    RECIPES.forEach(r => { if (r.job === job) n += S.tools[r.id] || 0; });
+    return (1 + n * D.toolBoost) * D.rate;
+  }
+  function cap(res) { return BASE_CAP + (res === "bricks" ? S.capBonus : 0); }
+
+  /* Colony: same rules as the strategy prototype, on sped-up time. */
+  function colony(dt) {
+    S.colonyTime += dt;
+    S.bush = Math.min(BUSH_MAX, S.bush + dt / BUSH_REGROW);
+    const assigned = D.wood + D.berries + D.fish + D.bricks;
+    const staff = assigned > 0 ? Math.min(1, S.people / assigned) : 0;
+    const hunger = S.hungry ? 0.5 : 1;
+    for (const job in JOBS) {
+      if (job === "berries" && S.bush < 1) continue;
+      const before = S.job[job];
+      S.job[job] += dt * D[job] * staff * hunger * jobSpeed(job) / JOBS[job].time;
+      const made = Math.floor(S.job[job]) - Math.floor(before);
+      if (made > 0) {
+        if (job === "berries") S.bush = Math.max(0, S.bush - made);
+        S.res[job] = Math.min(cap(job), S.res[job] + made);
+      }
+    }
+    S.meal -= dt;
+    while (S.meal <= 0) { S.meal += MEAL_EVERY; eat(); }
+  }
+
+  function eat() {
+    let short = 0;
+    for (let i = 0; i < S.people; i++) {
+      if (S.res.berries > 0) S.res.berries--;
+      else if (S.res.fish > 0) S.res.fish--;
+      else short++;
+    }
+    const was = S.hungry;
+    S.hungry = short > 0;
+    S.stats.meals++;
+    if (S.hungry) S.stats.hungryMeals++;
+    if (S.hungry && !was) { toast("The colony ran out of food. They work at half speed."); log("hungry", `${short} short`); }
+    if (!S.hungry && was) log("fed", "");
+  }
+
+  /* Frame */
+  function update(dt) {
+    if (dt <= 0) return;
+    S.real += dt;
+    hand.t += dt;
+
+    const k = D.lag > 0 ? 1 - Math.exp(-dt / D.lag) : 1;
+    const px = hand.x, py = hand.y;
+    hand.sx += (hand.tx - hand.sx) * k;
+    hand.sy += (hand.ty - hand.sy) * k;
+    const shake = reduced ? 0 : D.tremor;
+    hand.x = hand.sx + (Math.sin(hand.t * 23) + Math.sin(hand.t * 37 + 1)) * 0.5 * shake;
+    hand.y = hand.sy + (Math.sin(hand.t * 29 + 2) + Math.sin(hand.t * 41)) * 0.5 * shake;
+    const steady = Math.hypot(hand.tx - hand.sx, hand.ty - hand.sy) / Math.max(D.lag, 0.02);
+    const inst = Math.hypot(hand.x - px, hand.y - py) / dt;
+    hand.speed += (Math.min(inst, steady + shake * 60) - hand.speed) * Math.min(1, dt * 12);
+
+    hand.wrist += (hand.wristGoal - hand.wrist) * Math.min(1, dt * 16);
+    const wobble = reduced ? 0 : Math.sin(hand.t * 19) * D.tremor * 0.5 * RAD;
+    const w = hand.wrist + wobble, c = Math.cos(w), s = Math.sin(w);
+
+    if (held) {
+      held.list.forEach(({ p, rx, ry, ra }) => {
+        p.x = hand.x + rx * c - ry * s;
+        p.y = hand.y + rx * s + ry * c;
+        p.a = ra + w;
+        drawPart(p);
+      });
+      findCandidate();
+      if (cand && hand.speed < D.fastSpeed) {
+        attempt = true;
+        S.setProgress = (S.setProgress || 0) + dt / D.holdTime;
+        if (S.setProgress >= 1) setJoint();
+      } else {
+        if (attempt && !cand) { S.stats.setLost++; log("joint-lost", "moved out of reach"); attempt = false; }
+        if (nearMiss && !S.missFlag) { S.stats.wrongAngle++; S.missFlag = true; }
+        if (!nearMiss) S.missFlag = false;
+        S.setProgress = Math.max(0, (S.setProgress || 0) - dt / Math.max(D.holdTime, 0.1) * 1.5);
+      }
+      breakCheck(dt);
+    }
+
+    if (!held && Math.hypot(hand.tx - hand.lastTx, hand.ty - hand.lastTy) < 0.5) {
+      hand.moved += dt;
+      if (hand.moved > 1.5) S.stats.idle += dt;
+    } else { hand.moved = 0; }
+    hand.lastTx = hand.tx; hand.lastTy = hand.ty;
+
+    if (!paused) colony(dt * D.timeScale);
+
+    drawBinds();
+    drawMarks();
+    drawArm();
+    drawColony();
+    if (showOverlay) drawOverlay(); else $("overlay").textContent = "";
+    tickStatus();
+  }
+
+  /* Drawing */
+  function drawPiles() {
+    const root = $("piles");
+    root.textContent = "";
+    for (const type in PILES) {
+      const pile = PILES[type];
+      const g = el("g", { class: "pile", "data-pile": type, transform: `translate(${pile.x} ${pile.y})` }, root);
+      el("rect", { class: "pile-pad", x: -78, y: -78, width: 156, height: 156 }, g);
+      const art = el("g", { class: "pile-art" }, g);
+      if (type === "stick") {
+        [[-16, -18, -8], [12, -8, 6], [-6, 4, -4], [8, 14, 9]].forEach(a => el("use", { href: "#p-stick", transform: `translate(${a[0] * 0.3} ${a[1] - 8}) rotate(${a[2]}) scale(0.92)` }, art));
+      } else if (type === "brick") {
+        [[-32, 2], [32, 2], [0, -34]].forEach(a => el("use", { href: "#p-brick", transform: `translate(${a[0]} ${a[1] - 2}) scale(0.9)` }, art));
+      } else {
+        el("ellipse", { class: "i-wet", cx: 0, cy: -8, rx: 62, ry: 36 }, art);
+        el("ellipse", { class: "i-mud", cx: -4, cy: -14, rx: 42, ry: 18 }, art);
+      }
+      const name = el("text", { class: "pile-name", y: 50 }, g); name.textContent = pile.name;
+      const costEl = el("text", { class: "pile-cost", y: 68 }, g);
+      pile.costEl = costEl; pile.g = g;
+    }
+  }
+
+  function drawBinds() {
+    const root = $("binds");
+    root.textContent = "";
+    conns.forEach(c => {
+      if (!c.bound) return;
+      const j = jointWorld(byId(c.a), c.ja);
+      el("use", { href: "#p-mud", transform: `translate(${j.x.toFixed(1)} ${j.y.toFixed(1)}) scale(0.8)` }, root);
+    });
+  }
+
+  function drawMarks() {
+    const root = $("marks");
+    root.textContent = "";
+    const group = activeGroup();
+    if (group && group.length > 1) {
+      group.forEach(p => {
+        const hw = p.type === "stick" ? 80 : 45;
+        el("circle", { class: "active-mark", cx: p.x, cy: p.y, r: hw }, root);
+      });
+    }
+    if (cand) {
+      const r = 26, len = 2 * Math.PI * r;
+      el("circle", { class: "ring-bg", cx: cand.x, cy: cand.y, r }, root);
+      el("circle", { class: "ring-fit", cx: cand.x, cy: cand.y, r, "stroke-dasharray": `${len * Math.min(1, S.setProgress || 0)} ${len}`, transform: `rotate(-90 ${cand.x} ${cand.y})` }, root);
+    } else if (nearMiss) {
+      el("circle", { class: "ring-turn", cx: nearMiss.x, cy: nearMiss.y, r: 26 }, root);
+      const t = el("text", { class: "pile-cost", x: nearMiss.x, y: nearMiss.y - 34 }, root);
+      t.textContent = "Turn your wrist";
+    }
+  }
+
+  function finger(g, d) {
+    el("path", { class: "s-skin-dark", "stroke-width": 18, d }, g);
+    el("path", { class: "s-skin", "stroke-width": 14, d }, g);
+  }
+
+  const OPEN = ["M-14 44L-24 -12", "M4 42L2 -24", "M20 44L26 -16", "M34 52L48 2", "M-20 74L-52 34"];
+  const PINCH = ["M-14 44Q-28 18 -2 -2", "M4 44L12 14", "M20 44L30 20", "M34 52L46 30", "M-20 76Q-46 44 -4 6"];
+  let armG, armPath, handG, handOpen, handPinch;
+
+  function buildArm() {
+    const root = $("arm");
+    root.textContent = "";
+    armPath = el("path", { class: "i-skin", stroke: "var(--skin-dark)", "stroke-width": 2 }, root);
+    handG = el("g", {}, root);
+    const palm = () => el("rect", { class: "i-skin", stroke: "var(--skin-dark)", "stroke-width": 2, x: -24, y: 38, width: 66, height: 68, rx: 20 }, handG);
+    handOpen = el("g", {}, handG); OPEN.forEach(d => finger(handOpen, d));
+    handPinch = el("g", {}, handG); PINCH.forEach(d => finger(handPinch, d));
+    palm();
+    el("circle", { class: "pinch-dot", cx: 0, cy: 0, r: 4 }, root).id = "pinch-dot";
+  }
+
+  function drawArm() {
+    const dx = hand.x - SHOULDER[0], dy = hand.y - SHOULDER[1];
+    const head = Math.atan2(dy, dx);
+    const turn = hand.wrist * 0.4;
+    const deg = (head + Math.PI / 2 + turn) / RAD;
+    handG.setAttribute("transform", `translate(${hand.x.toFixed(1)} ${hand.y.toFixed(1)}) rotate(${deg.toFixed(1)})`);
+    handOpen.style.display = hand.down ? "none" : "";
+    handPinch.style.display = hand.down ? "" : "none";
+    const a = head + turn;
+    const wx = hand.x - Math.cos(a) * 100, wy = hand.y - Math.sin(a) * 100;
+    const nx = -Math.sin(head), ny = Math.cos(head);
+    armPath.setAttribute("d", `M${wx + nx * 22} ${wy + ny * 22}L${SHOULDER[0] + nx * 70} ${SHOULDER[1] + ny * 70}L${SHOULDER[0] - nx * 70} ${SHOULDER[1] - ny * 70}L${wx - nx * 22} ${wy - ny * 22}Z`);
+    const dot = $("pinch-dot");
+    dot.setAttribute("cx", hand.x.toFixed(1)); dot.setAttribute("cy", hand.y.toFixed(1));
+  }
+
+  function drawOverlay() {
+    const root = $("overlay");
+    root.textContent = "";
+    parts.forEach(p => {
+      JOINTS[p.type].forEach((_, i) => {
+        const j = jointWorld(p, i);
+        el("circle", { class: jointUsed(p, i) ? "dbg-used" : "dbg-joint", cx: j.x, cy: j.y, r: 3.5 }, root);
+      });
+    });
+    el("circle", { class: "dbg-snap", cx: hand.x, cy: hand.y, r: D.snapTol }, root);
+    el("path", { class: "dbg-cursor", d: `M${hand.tx - 10} ${hand.ty}H${hand.tx + 10}M${hand.tx} ${hand.ty - 10}V${hand.ty + 10}` }, root);
+    const group = activeGroup();
+    let text = "Build: none";
+    if (group && group.length > 1) {
+      const m = matchRecipe(signature(group));
+      text = "Build: " + (m.recipe ? m.recipe.name : m.near ? `${m.near.name} (needs mud)` : "junk") + "  " + JSON.stringify(signature(group).kinds);
+    }
+    const a = el("text", { class: "dbg-text", x: 190, y: 26 }, root); a.textContent = text;
+    const b = el("text", { class: "dbg-text", x: 190, y: 46 }, root); b.textContent = `speed ${hand.speed.toFixed(0)}  wrist ${(hand.wrist / RAD).toFixed(0)}  set ${((S.setProgress || 0) * 100).toFixed(0)}%`;
+  }
+
+  /* Colony window */
+  let cvBuilt = false, cvPeople = [];
+  const CV_SPOTS = { wood: [78, 70], berries: [84, 118], fish: [232, 62], bricks: [232, 116] };
+  function buildColonyView() {
+    const v = $("colony-view");
+    v.textContent = "";
+    el("use", { href: "#island-under", transform: "translate(160 88) scale(1.45 1.9)" }, v);
+    el("use", { href: "#island-top", transform: "translate(160 88) scale(1.45 1.9)" }, v);
+    el("use", { href: "#palm", transform: "translate(50 72) scale(0.42)" }, v);
+    el("use", { href: "#palm", transform: "translate(70 60) scale(0.36)" }, v);
+    el("use", { href: "#bush", transform: "translate(58 126) scale(0.62)" }, v);
+    el("ellipse", { class: "i-wet", cx: 214, cy: 120, rx: 22, ry: 9 }, v);
+    el("use", { href: "#fish", transform: "translate(292 42) scale(0.5)" }, v);
+    el("g", { id: "cv-people" }, v);
+    cvBuilt = true; cvPeople = [];
+    syncColonyPeople();
+  }
+  function syncColonyPeople() {
+    const root = $("cv-people");
+    if (!root) return;
+    root.textContent = "";
+    cvPeople = [];
+    const colors = ["var(--cloth-a)", "var(--cloth-c)", "var(--cloth-b)", "var(--leaf-dark)"];
+    let n = 0;
+    for (const job in JOBS) {
+      for (let i = 0; i < D[job] && n < S.people; i++, n++) {
+        const g = el("g", {}, root);
+        g.style.color = colors[n % 4];
+        el("use", { href: "#person", transform: "scale(0.62)" }, g);
+        cvPeople.push({ g, x: CV_SPOTS[job][0] + i * 14, y: CV_SPOTS[job][1] + (i % 2) * 6, phase: n * 1.3 });
+      }
+    }
+    while (n < S.people) {
+      const g = el("g", {}, root);
+      g.style.color = colors[n % 4];
+      el("use", { href: "#person", transform: "scale(0.62)" }, g);
+      cvPeople.push({ g, x: 150 + (n % 4) * 12, y: 96 + (n % 2) * 8, phase: 0, rest: true });
+      n++;
+    }
+    cvCount = S.people;
+  }
+  let cvCount = 0, cvWorkers = "";
+  function drawColony() {
+    const w = `${D.wood},${D.berries},${D.fish},${D.bricks}`;
+    if (S.people !== cvCount || w !== cvWorkers) { cvWorkers = w; syncColonyPeople(); }
+    const speed = paused ? 0 : Math.min(D.timeScale, 8);
+    cvPeople.forEach(p => {
+      const hop = reduced || p.rest ? 0 : Math.abs(Math.sin(S.real * (3 + speed) + p.phase)) * 3;
+      p.g.setAttribute("transform", `translate(${p.x} ${(p.y - hop).toFixed(1)})`);
+    });
+  }
+
+  /* Status */
+  function tickStatus() {
+    const day = Math.floor(S.colonyTime / DAY_COLONY) + 1;
+    if (day !== S.dayShown) { S.dayShown = day; if (day > 1) log("day", String(day)); refresh(); }
+    const realDay = DAY_COLONY / D.timeScale;
+    $("time-note").textContent = paused ? "Colony paused" : `Time ${D.timeScale}x: one day takes ${realDay >= 10 ? Math.round(realDay) : realDay.toFixed(1)}s. Your hand stays in real time.`;
+    S.tick = (S.tick || 0) + 1;
+    if (S.tick % 12 === 0) refresh();
+    if (S.tick % 30 === 0 && !$("debug").hidden) drawStats();
+  }
+
+  function refresh() {
+    for (const job in JOBS) {
+      const box = $("res-" + job);
+      box.querySelector(".res-num").textContent = S.res[job];
+      const boost = jobSpeed(job) / D.rate;
+      let note = `${D[job]} working`;
+      if (boost > 1) note += `, x${boost.toFixed(1)}`;
+      if (job === "berries") note += `, ${Math.floor(S.bush)} left`;
+      box.querySelector(".res-note").textContent = note;
+    }
+    $("day").textContent = Math.floor(S.colonyTime / DAY_COLONY) + 1;
+    $("people").textContent = S.people;
+    $("hungry").hidden = !S.hungry;
+    for (const type in PILES) {
+      const pile = PILES[type], cost = pileCost(type);
+      if (!pile.costEl) continue;
+      pile.costEl.textContent = pile.res ? `${cost} ${pile.res}` : "Free";
+      pile.g.classList.toggle("off", !!pile.res && S.res[pile.res] < cost);
+    }
+    const group = activeGroup();
+    const n = group ? group.length : 0;
+    const btn = $("test");
+    btn.disabled = n < 2 || !!held;
+    btn.textContent = n >= 2 ? `Test tool (${n} parts)` : "Test tool";
+    const found = Object.keys(S.found).length;
+    $("book-label").textContent = `Tool book: ${found} of ${RECIPES.length}`;
+  }
+
+  function drawShape(host, r, known) {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    r.shape.forEach(p => {
+      const a = p[3] * RAD, hw = p[0] === "stick" ? 70 : 35, hh = p[0] === "stick" ? 6 : 17;
+      const ex = Math.abs(Math.cos(a)) * hw + Math.abs(Math.sin(a)) * hh, ey = Math.abs(Math.sin(a)) * hw + Math.abs(Math.cos(a)) * hh;
+      x0 = Math.min(x0, p[1] - ex); x1 = Math.max(x1, p[1] + ex);
+      y0 = Math.min(y0, p[2] - ey); y1 = Math.max(y1, p[2] + ey);
+    });
+    const v = el("svg", { viewBox: `${x0 - 12} ${y0 - 12} ${x1 - x0 + 24} ${y1 - y0 + 24}`, "aria-hidden": "true" }, host);
+    const g = el("g", { class: known ? "" : "ghost" }, v);
+    r.shape.forEach(s => el("use", { href: "#p-" + s[0], transform: `translate(${s[1]} ${s[2]}) rotate(${s[3]})` }, g));
+    r.conns.slice(r.conns.length - r.bound).forEach(c => {
+      const s = r.shape[c[0]], j = JOINTS[s[0]][c[1]], a = s[3] * RAD;
+      const x = s[1] + j[0] * Math.cos(a) - j[1] * Math.sin(a), y = s[2] + j[0] * Math.sin(a) + j[1] * Math.cos(a);
+      el("use", { href: "#p-mud", transform: `translate(${x} ${y}) scale(0.8)` }, g);
+    });
+  }
+
+  function buildBook() {
+    const book = $("book");
+    book.textContent = "";
+    RECIPES.forEach(r => {
+      const known = r.id in S.found;
+      const box = document.createElement("div");
+      box.className = "tool" + (known ? " found" : "");
+      if (D.showIcons) drawShape(box, r, known || D.hints === 0);
+      const b = document.createElement("b");
+      b.textContent = known ? r.name : "Unknown";
+      box.appendChild(b);
+      const s = document.createElement("small");
+      s.textContent = known ? r.effect : D.hints === 0 ? r.exact : D.hints === 1 ? r.parts : r.vague;
+      box.appendChild(s);
+      if (known) {
+        if (D.showRecipe) {
+          const how = document.createElement("small");
+          how.className = "how";
+          how.textContent = r.exact;
+          box.appendChild(how);
+        }
+        const c = document.createElement("small");
+        c.className = "count";
+        c.textContent = `You have ${S.tools[r.id] || 0} of ${MAX_COPIES}`;
+        box.appendChild(c);
+      }
+      book.appendChild(box);
+    });
+    drawRecipeList();
+  }
+
+  function drawRecipeList() {
+    const list = $("recipe-list");
+    list.textContent = "";
+    RECIPES.forEach(r => {
+      const li = document.createElement("li");
+      const b = document.createElement("b");
+      b.textContent = `${r.name} (${(S.variants[r.id] || 0) + 1}): `;
+      li.append(b, r.exact);
+      list.appendChild(li);
+    });
+  }
+
+  function float(x, y, text) {
+    const t = el("text", { class: "float", x, y }, $("floats"));
+    t.textContent = text;
+    setTimeout(() => t.remove(), 1600);
+  }
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+  }
+
+  /* Input */
+  function toSvg(e) {
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+    return [Math.max(0, Math.min(1200, p.x)), Math.max(0, Math.min(720, p.y))];
+  }
+  svg.addEventListener("pointerdown", e => {
+    if (e.button) return;
+    e.preventDefault();
+    [hand.tx, hand.ty] = toSvg(e);
+    if (e.pointerType === "touch") { hand.sx = hand.tx; hand.sy = hand.ty; hand.x = hand.tx; hand.y = hand.ty; }
+    pid = e.pointerId;
+    try { svg.setPointerCapture(pid); } catch (err) { /* synthetic pointer */ }
+    pinch();
+  });
+  svg.addEventListener("pointermove", e => { [hand.tx, hand.ty] = toSvg(e); });
+  const up = e => { if (e.pointerId === pid) { pid = null; release(); } };
+  svg.addEventListener("pointerup", up);
+  svg.addEventListener("pointercancel", up);
+  function turn(sign) { hand.wristGoal += sign * D.wristStep * RAD; }
+  svg.addEventListener("wheel", e => { e.preventDefault(); turn(Math.sign(e.deltaY)); }, { passive: false });
+  $("turn-l").addEventListener("click", () => turn(-1));
+  $("turn-r").addEventListener("click", () => turn(1));
+  window.addEventListener("keydown", e => {
+    const tag = e.target.tagName;
+    if (tag === "TEXTAREA") return;
+    if (e.key === "`") { toggleDebug(); e.preventDefault(); }
+    else if (e.key === "q" || e.key === "Q") turn(-1);
+    else if (e.key === "e" || e.key === "E") turn(1);
+    else if (e.key === "t" || e.key === "T") testTool();
+  });
+  $("test").addEventListener("click", testTool);
+
+  /* Debug panel */
+  function toggleDebug(force) {
+    const box = $("debug");
+    box.hidden = force === undefined ? !box.hidden : !force;
+    if (!box.hidden) { syncDials(); drawStats(); drawRuns(); $("log").textContent = S.log.map(l => `${l.t.toFixed(1).padStart(6)} ${l.type} ${l.detail}`).join("\n") + "\n"; $("log").scrollTop = 1e6; }
+  }
+  $("open-debug").addEventListener("click", () => toggleDebug());
+  $("close-debug").addEventListener("click", () => toggleDebug(false));
+
+  function buildDials() {
+    for (const k in DIALS) {
+      const d = DIALS[k], host = $("dials-" + d.group);
+      if (d.toggle) {
+        const row = document.createElement("label");
+        row.className = "check";
+        row.htmlFor = "dial-" + k;
+        const input = document.createElement("input");
+        input.type = "checkbox"; input.id = "dial-" + k;
+        input.addEventListener("change", () => setDial(k, input.checked ? 1 : 0));
+        const name = document.createElement("span"); name.textContent = d.label;
+        row.append(input, name);
+        host.appendChild(row);
+        continue;
+      }
+      const row = document.createElement("label");
+      row.className = "dial";
+      row.htmlFor = "dial-" + k;
+      const name = document.createElement("span"); name.textContent = d.label;
+      const input = document.createElement("input");
+      input.type = "range"; input.id = "dial-" + k; input.min = d.min; input.max = d.max; input.step = d.step;
+      const out = document.createElement("output"); out.id = "out-" + k;
+      input.addEventListener("input", () => setDial(k, +input.value));
+      row.append(name, input, out);
+      host.appendChild(row);
+    }
+    for (const name in PRESETS) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = name; b.dataset.preset = name;
+      b.addEventListener("click", () => applyPreset(name));
+      $("presets").appendChild(b);
+    }
+    RECIPES.forEach(r => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = "Lay out " + r.name;
+      b.className = "quiet";
+      b.addEventListener("click", () => layout(r.id));
+      $("c-build").appendChild(b);
+    });
+  }
+  function setDial(k, v) {
+    D[k] = v;
+    if (k in PRESETS.Balanced) markPreset();
+    if (k === "materials") {
+      setLevel(v);
+      setVariants(nextVariants(S.variants));
+      log("materials", LEVEL_NAMES[v - 1]);
+    }
+    if (k === "hints" || k === "showIcons" || k === "showRecipe") buildBook();
+    persist(); syncDials(); refresh();
+  }
+  function syncDials() {
+    for (const k in DIALS) {
+      const input = $("dial-" + k), out = $("out-" + k);
+      if (input && DIALS[k].toggle) input.checked = !!D[k];
+      else if (input) input.value = D[k];
+      if (out) out.textContent = DIALS[k].names ? DIALS[k].names[D[k] - 1] : D[k];
+    }
+    document.querySelectorAll("#presets button").forEach(b => b.classList.toggle("on", b.dataset.preset === presetName));
+    $("c-pause").textContent = paused ? "Resume colony" : "Pause colony";
+    $("c-overlay").textContent = showOverlay ? "Overlay on" : "Overlay off";
+  }
+  function markPreset() {
+    const match = Object.keys(PRESETS).find(n => Object.keys(PRESETS[n]).every(k => PRESETS[n][k] === D[k]));
+    presetName = match || "Custom";
+  }
+  function applyPreset(name) {
+    Object.assign(D, PRESETS[name]);
+    presetName = name;
+    log("preset", name);
+    buildBook(); persist(); syncDials(); refresh();
+  }
+
+  function give(n) { for (const job in JOBS) S.res[job] = Math.min(cap(job) + 40, S.res[job] + n); refresh(); }
+  function skipDay() { colony(DAY_COLONY); refresh(); }
+  function unlockAll() { RECIPES.forEach(r => { if (!(r.id in S.found)) { S.found[r.id] = +S.real.toFixed(1); } }); buildBook(); refresh(); }
+  function lockAll() { S.found = {}; S.tools = {}; S.capBonus = 0; S.people = 4; buildBook(); refresh(); }
+  function clearBench() {
+    parts.slice().forEach(removePart);
+    conns = []; held = null; active = null; cand = null; attempt = false;
+    refresh();
+  }
+  function layout(id) {
+    const r = RECIPES.find(x => x.id === id);
+    if (!r) return null;
+    const made = r.shape.map(s => addPart(s[0], 560 + s[1], 360 + s[2], s[3] * RAD));
+    r.conns.forEach(c => conns.push({ a: made[c[0]].id, ja: c[1], b: made[c[2]].id, jb: c[3], bound: false }));
+    for (let i = 0; i < r.bound; i++) conns[conns.length - 1 - i].bound = true;
+    active = made[0];
+    refresh();
+    return made;
+  }
+
+  function shuffleNow() {
+    setVariants(nextVariants(S.variants));
+    log("shuffle", recipeSet());
+    toast("The recipes have changed.");
+  }
+  function setVariants(map) {
+    S.variants = map;
+    saved.lastVariants = map;
+    useVariants(map);
+    persist();
+    buildBook();
+  }
+  const recipeSet = () => RECIPES.map(r => (S.variants[r.id] || 0) + 1).join("-");
+  $("c-shuffle").addEventListener("click", shuffleNow);
+  $("c-pause").addEventListener("click", () => { paused = !paused; syncDials(); });
+  $("c-give").addEventListener("click", () => give(20));
+  $("c-day").addEventListener("click", skipDay);
+  $("c-unlock").addEventListener("click", unlockAll);
+  $("c-lock").addEventListener("click", lockAll);
+  $("c-clear").addEventListener("click", clearBench);
+  $("c-overlay").addEventListener("click", () => { showOverlay = !showOverlay; syncDials(); });
+  $("c-restart").addEventListener("click", () => reset());
+
+  function runStats() {
+    const st = S.stats;
+    const tries = st.setOk + st.setLost;
+    return {
+      "Preset": presetName,
+      "Materials": LEVEL_NAMES[D.materials - 1],
+      "Recipe set": recipeSet(),
+      "Run time": `${Math.floor(S.real / 60)}:${String(Math.floor(S.real % 60)).padStart(2, "0")}`,
+      "Days passed": Math.floor(S.colonyTime / DAY_COLONY),
+      "Tools found": `${Object.keys(S.found).length} of ${RECIPES.length}`,
+      "First tool at": st.firstFind === null ? "none" : st.firstFind + "s",
+      "Joints set": st.setOk,
+      "Joints lost": st.setLost,
+      "Joint success": tries ? Math.round(st.setOk / tries * 100) + "%" : "none",
+      "Wrong-angle misses": st.wrongAngle,
+      "Breaks from speed": st.breaks,
+      "Tests": st.tests,
+      "Junk built": st.junk,
+      "Different junk ideas": st.junkIdeas.length,
+      "Fell apart (needed mud)": st.nearMiss,
+      "Hand idle": Math.round(st.idle) + "s",
+      "Hungry meals": `${st.hungryMeals} of ${st.meals}`
+    };
+  }
+  function drawStats() {
+    const box = $("stats");
+    box.textContent = "";
+    const data = runStats();
+    for (const k in data) {
+      const a = document.createElement("span"); a.textContent = k;
+      const b = document.createElement("span"); b.textContent = data[k];
+      box.append(a, b);
+    }
+  }
+  function drawRuns() {
+    const t = $("runs");
+    t.textContent = "";
+    const cols = ["#", "Preset", "Materials", "Recipes", "Time", "Found", "Joint %", "Junk ideas", "Idle", "Fun", "Hands-head", "Note"];
+    const head = t.insertRow();
+    cols.forEach(c => { const th = document.createElement("th"); th.textContent = c; head.appendChild(th); });
+    saved.runs.forEach((r, i) => {
+      const row = t.insertRow();
+      [i + 1, r.stats["Preset"], r.stats["Materials"] || "Medium", r.stats["Recipe set"] || "none", r.stats["Run time"], r.stats["Tools found"], r.stats["Joint success"], r.stats["Different junk ideas"], r.stats["Hand idle"], r.fun, r.mode, r.note].forEach((v, n) => {
+        const c = row.insertCell();
+        c.textContent = v;
+        if (n === 11) c.className = "note";
+      });
+    });
+    if (!saved.runs.length) {
+      const row = t.insertRow(), c = row.insertCell();
+      c.colSpan = cols.length; c.textContent = "No rated runs yet. Press End run and rate after playing.";
+    }
+  }
+  $("copy-runs").addEventListener("click", () => {
+    const text = JSON.stringify(saved.runs, null, 2);
+    const box = $("runs-json");
+    const fallback = () => { box.hidden = false; box.value = text; box.select(); };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast("Runs copied."), fallback);
+    else fallback();
+  });
+  $("clear-runs").addEventListener("click", () => { saved.runs = []; persist(); drawRuns(); });
+
+  $("end-run").addEventListener("click", () => { $("rate").hidden = false; });
+  $("rate-cancel").addEventListener("click", () => { $("rate").hidden = true; });
+  $("rate-form").addEventListener("submit", e => {
+    e.preventDefault();
+    saveRun(+$("r-fun").value, +$("r-mode").value, $("r-note").value);
+    $("r-note").value = "";
+    $("rate").hidden = true;
+    reset();
+  });
+  function saveRun(fun, mode, note) {
+    saved.runs.push({ when: new Date().toISOString(), fun, mode, note, stats: runStats(), dials: Object.assign({}, D), log: S.log.slice(-120) });
+    persist();
+    if (!$("debug").hidden) drawRuns();
+  }
+
+  /* Start */
+  function reset(data) {
+    const restored = !!(data && data.res), hadRun = !!S;
+    if (S) clearBench();
+    S = restored ? Object.assign(newState(), data) : newState();
+    S.variants = restored && data.variants ? data.variants : nextVariants(saved.lastVariants);
+    saved.lastVariants = S.variants;
+    useVariants(S.variants);
+    persist();
+    hand.wrist = 0; hand.wristGoal = 0;
+    $("floats").textContent = "";
+    $("toast").hidden = true;
+    $("log").textContent = "";
+    if (data && data.parts) {
+      const map = {};
+      data.parts.forEach(q => { map[q.id] = addPart(q.type, q.x, q.y, q.a); });
+      (data.conns || []).forEach(c => { if (map[c.a] && map[c.b]) conns.push({ a: map[c.a].id, ja: c.ja, b: map[c.b].id, jb: c.jb, bound: c.bound }); });
+    }
+    if (!restored) log("start", `${presetName}, recipes ${recipeSet()}`);
+    drawPiles();
+    buildBook();
+    if (!cvBuilt) buildColonyView();
+    syncColonyPeople();
+    syncDials();
+    refresh();
+    if (hadRun && !restored && D.shuffle) toast("New run: every recipe has changed a little.");
+  }
+
+  window.debug = {
+    get state() { return S; }, get parts() { return parts; }, get conns() { return conns; }, get hand() { return hand; }, get dials() { return D; }, get stats() { return runStats(); }, get runs() { return saved.runs; },
+    recipes: RECIPES, set: setDial, preset: applyPreset, give, skipDay, unlock: unlockAll, lock: lockAll, clear: clearBench, restart: () => reset(),
+    layout, shuffle: shuffleNow, setVariants, jointWorld, test: testTool, match: () => { const g = activeGroup(); return g ? matchRecipe(signature(g)) : null; },
+    pause: v => { paused = v === undefined ? !paused : v; syncDials(); }, overlay: v => { showOverlay = v === undefined ? !showOverlay : v; syncDials(); },
+    open: () => toggleDebug(true), step: (seconds, dt) => { const d = dt || 1 / 60; for (let t = 0; t < seconds; t += d) update(d); }, saveRun, jobSpeed
+  };
+
+  buildDials();
+  buildArm();
+
+  function start(data) {
+    reset(data);
+    let last = performance.now();
+    (function frame(now) {
+      const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+      last = now;
+      update(dt);
+      requestAnimationFrame(frame);
+    })(last);
+  }
+
+  window.claude?.hot?.snapshot?.(() => ({
+    res: S.res, bush: S.bush, job: S.job, meal: S.meal, colonyTime: S.colonyTime, real: S.real, people: S.people, hungry: S.hungry,
+    tools: S.tools, found: S.found, capBonus: S.capBonus, variants: S.variants, stats: S.stats, log: S.log,
+    parts: parts.map(p => ({ id: p.id, type: p.type, x: p.x, y: p.y, a: p.a })), conns
+  }));
+  window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
